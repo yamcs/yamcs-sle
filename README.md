@@ -1,4 +1,4 @@
-This project contains Yamcs Data Links for enablign yamcs to receive data from an SLE provider.
+This project contains Yamcs Data Links for enabling yamcs to receive data from an SLE provider.
 For the moment only RAF (Return All Frames) is supported.
 
 ## Installation and test
