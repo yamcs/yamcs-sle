@@ -61,3 +61,4 @@ To run in development mode (both yamcs and yamcs-sle), please clone both yamcs a
 
 After compiling yamcs with make (or mvn install), and yamcs-sle with mvn install, a yamcs server can be started from the live directory by running the script dev.sh in the yamcs-sle repository.
 
+![](yamcs-connected-to-sle.png?raw=true)
