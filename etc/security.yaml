@@ -1,0 +1,8 @@
+#do not authenticate when connecting to yamcs
+enabled: false
+
+
+# username passowrds used for the SLE
+# these are used both for the service user (i.e. yamcs) and the service provider
+SLE:
+   mertens: 000102030405060708090a0b0c0d0e0f

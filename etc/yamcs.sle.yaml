@@ -1,0 +1,88 @@
+services:
+  - class: org.yamcs.tctm.DataLinkInitialiser
+  - class: org.yamcs.archive.XtceTmRecorder
+  - class: org.yamcs.archive.ParameterRecorder
+  - class: org.yamcs.archive.AlarmRecorder
+  - class: org.yamcs.archive.EventRecorder
+  - class: org.yamcs.archive.ReplayServer
+  - class: org.yamcs.archive.IndexServer
+  - class: org.yamcs.ProcessorCreatorService
+    args: 
+      name: "realtime"
+      type: "realtime" 
+  - class: org.yamcs.archive.CommandHistoryRecorder
+  - class: org.yamcs.parameterarchive.ParameterArchive
+    args:
+      realtimeFiller: 
+        enabled: false
+      backFiller:
+        enabled: true
+        warmupTime: 60
+
+#name of the class that is used for the TM index. If not specified, org.yamcs.archive.GenericCccsdsTmIndex is used
+#tmIndexer: 
+
+dataLinks:
+  - name: SLE_IN
+    class: org.yamcs.tctm.sle.TmFrameLink
+    args:
+       #-------------- SLE config options (TODO: maybe we should put these in a separate file to avoid repeating in case of multiple SLE links)
+       host: localhost #SLE host and port to connect to
+       port: 25711 
+       initiatorId: "mertens"
+       responderPortId: "Harness_Port_1"
+       myUsername: "mertens"
+       peerUsername: "mertens"
+       hashAlgorithm: "SHA-1"  # algorithm used to hash the password: one of SHA-1 or SHA-256
+       authLevel: ALL   # which PDU contain the authentication: one of NONE, BIND or ALL
+       deliveryMode: rtnTimelyOnline # one of rtnTimelyOnline, rtnCompleteOnline or rtnOffline
+       versionNumber: 2  #version number send in bind invocation
+       
+       #------------- FRAME processing config options
+       #one of AOS (CCSDS 732.0-B-3), TM (CCSDS 132.0-B-2) or USLP (CCSDS 732.1-B-1)
+       frameType: "AOS"
+       spacecraftId: 0xAB
+       frameLength: 496
+       frameHeaderErrorControlPresent: false #2 bytes of reed-solomon (10,6) in the header of all frames
+       insertZoneLength: 0
+       errorCorrection: CRC16 #NONE, CRC16 or CRC32 (only for USLP)
+       virtualChannels:
+          - vcId: 0
+            ocfPresent: true
+            service: "PACKET"  #supported services for AOS are PACKET (e.g. M_PDU).
+            maxPacketLength: 2048
+            packetPreprocessorClassName: org.yamcs.tctm.IssPacketPreprocessor
+            stream: "tm_realtime" #which yamcs stream to put the data on
+          - vcId: 1
+            ocfPresent: false
+            service: "PACKET" 
+            maxPacketLength: 2048
+            stripEncapsulationHeader: true # drop the header before passing the packet to the preprocessor
+            packetPreprocessorClassName: org.yamcs.tctm.GenericPacketPreprocessor
+            packetPreprocessorArgs:
+                timestampOffset: 2 #where to read the 8 bytes timestamp offset from
+                seqCountOffset: 10 #where to read the 4 bytes sequence count from
+                errorDetection: #last two bytes are used for the error detection
+                   type: "CRC-16-CCIIT" 
+            stream: "tm2_realtime"
+          #vcId 63 is reserved for idle data and it does not have to be defined
+
+
+mdb:
+  # Configuration of the active loaders
+  # Valid loaders are: sheet, xtce or fully qualified name of the class
+  - type: "sheet"
+    spec: "mdb/sle.xls"
+
+#Configuration for streams created at server startup
+streamConfig:
+  tm:
+    - name: "tm_realtime"
+    - name: "tm2_realtime"
+      rootContainer: "/SLE/tm2_container"
+    - name: "tm_dump"
+  cmdHist: ["cmdhist_realtime", "cmdhist_dump"]
+  event: ["events_realtime", "events_dump"]
+  param: ["pp_realtime", "pp_tse", "sys_param"]
+  alarm: ["alarms_realtime"]
+  tc: ["tc_realtime"]
