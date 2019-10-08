@@ -10,21 +10,17 @@ import org.yamcs.YConfiguration;
 import org.yamcs.api.EventProducer;
 import org.yamcs.api.EventProducerFactory;
 import org.yamcs.sle.FrameConsumer;
-import org.yamcs.sle.Isp1Authentication;
 import org.yamcs.sle.Isp1Handler;
 import org.yamcs.sle.RafServiceUserHandler;
 import org.yamcs.sle.RafSleMonitor;
-import org.yamcs.sle.AbstractServiceUserHandler.AuthLevel;
 import org.yamcs.sle.CcsdsTime;
-import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.Constants.LockStatus;
 import org.yamcs.sle.Constants.RafProductionStatus;
 import org.yamcs.tctm.AggregatedDataLink;
 import org.yamcs.tctm.Link;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.MasterChannelFrameHandler;
-import org.yamcs.tctm.ccsds.VirtualChannelHandler;
-import org.yamcs.utils.StringConverter;
+import org.yamcs.tctm.ccsds.VcDownlinkHandler;
 
 import com.google.common.util.concurrent.AbstractService;
 
@@ -103,18 +99,10 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
     private volatile boolean disabled = false;
     long frameCount = 0;
     RafServiceUserHandler rsuh;
-    String host;
-    int port;
-    Isp1Authentication auth;
-    DeliveryMode deliveryMode;
-    String responderPortId;
-    String initiatorId;
+    
     MyConsumer frameConsumer = new MyConsumer();
     RafSleMonitor sleMonitor = new MyMonitor();
-    int versionNumber;
-    private AuthLevel authLevel;
-    int serviceInstanceNumber;
-
+    SleConfig sconf;
     /**
      * Creates a new UDP Frame Data Link
      * 
@@ -124,22 +112,11 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
     public TmFrameLink(String instance, String name, YConfiguration config) throws ConfigurationException {
         this.yamcsInstance = instance;
         this.name = name;
-        host = config.getString("host");
-        port = config.getInt("port");
-
-        responderPortId = config.getString("responderPortId");
-        initiatorId = config.getString("initiatorId");
-        deliveryMode = config.getEnum("deliveryMode", DeliveryMode.class);
-        auth = getAuthentication(config);
-        authLevel = config.getEnum("authLevel", AuthLevel.class);
-
+        this.sconf = new SleConfig(config);
         frameHandler = new MasterChannelFrameHandler(yamcsInstance, name, config);
         eventProducer = EventProducerFactory.getEventProducer(yamcsInstance, "SLE[" + name + "]", 10000);
-        versionNumber = config.getInt("versionNumber", 5);
-        serviceInstanceNumber = config.getInt("serviceInstanceNumber", 1);
-
         subLinks = new ArrayList<>();
-        for (VirtualChannelHandler vch : frameHandler.getVcHandlers()) {
+        for (VcDownlinkHandler vch : frameHandler.getVcHandlers()) {
             if (vch instanceof Link) {
                 Link l = (Link) vch;
                 subLinks.add(l);
@@ -148,21 +125,7 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
         }
     }
 
-    private Isp1Authentication getAuthentication(YConfiguration c) {
-        String myUsername = c.getString("myUsername");
-        String peerUsername = c.getString("peerUsername");
-        String hashAlgo = c.getString("hashAlgorithm", "SHA-256");
-        if (!"SHA-1".equalsIgnoreCase(hashAlgo) && !"SHA-256".equalsIgnoreCase(hashAlgo)) {
-            throw new ConfigurationException(
-                    "Invalid hash algorithm '" + hashAlgo + "' specified. Supported are SHA-1 and SHA-256");
-        }
-
-        YConfiguration sec = YConfiguration.getConfiguration("security");
-        YConfiguration slesec = sec.getConfig("SLE");
-        byte[] myPass = StringConverter.hexStringToArray(slesec.getString(myUsername));
-        byte[] peerPass = StringConverter.hexStringToArray(slesec.getString(peerUsername));
-        return new Isp1Authentication(myUsername, myPass, peerUsername, peerPass, hashAlgo);
-    }
+  
 
     @Override
     protected void doStart() {
@@ -182,11 +145,11 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
     }
 
     private synchronized void connect() {
-        log.debug("Connecting to SLE RAF service {}:{} as user {}", host, port, auth.getMyUsername());
-        rsuh = new RafServiceUserHandler(auth, responderPortId, initiatorId, deliveryMode,
-                serviceInstanceNumber, frameConsumer);
-        rsuh.setVersionNumber(versionNumber);
-        rsuh.setAuthLevel(authLevel);
+        log.debug("Connecting to SLE RAF service {}:{} as user {}", sconf.host, sconf.port, sconf.auth.getMyUsername());
+        rsuh = new RafServiceUserHandler(sconf.auth, sconf.responderPortId, sconf.initiatorId, sconf.deliveryMode,
+                sconf.serviceInstanceNumber, frameConsumer);
+        rsuh.setVersionNumber(sconf.versionNumber);
+        rsuh.setAuthLevel(sconf.authLevel);
         rsuh.addMonitor(sleMonitor);
         NioEventLoopGroup workerGroup = EventLoopResource.getEventLoop();
         Bootstrap b = new Bootstrap();
@@ -201,7 +164,7 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
                 ch.pipeline().addLast(rsuh);
             }
         });
-        b.connect(host, port).addListener(f -> {
+        b.connect(sconf.host, sconf.port).addListener(f -> {
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 rsuh = null;
@@ -403,5 +366,11 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
         public void onEndOfData() {
             eventProducer.sendInfo("SLE end of data received");
         }
+    }
+
+    @Override
+    public void resetCounters() {
+        // TODO Auto-generated method stub
+        
     }
 }
