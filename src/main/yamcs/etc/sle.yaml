@@ -1,0 +1,50 @@
+CommonSettings: &CommonSettings
+   # algorithm used to hash the password: one of SHA-1 or SHA-256
+   hashAlgorithm: "SHA-1"
+   
+   # which PDU contain the authentication: one of NONE, BIND or ALL  
+   authLevel: ALL
+   
+   #version number send in bind invocation
+   versionNumber: 2
+   #my username and password. The password is in hexadecimal
+   myUsername: "mertens"
+   myPassword:  000102030405060708090a0b0c0d0e0f
+   
+   initiatorId: "mertens"
+   responderPortId: "Harness_Port_1"
+   
+   #heartbeaet settings 
+   minHeartbeatInterval: 10
+   maxHeartbeatDeadFactor: 10
+   heartbeatInterval: 30
+   heartbeatDeadFactor: 3
+   authenticationTimeout: 60
+   
+      
+      
+Providers:
+   GS1:
+      <<: *CommonSettings
+      peerUsername: "proxy"
+      peerPassword: AB0102030405060708090a0b0c0d0e0f
+      
+      cltu:
+        host: localhost 
+        port: 25711
+        serviceInstance: "sagr=SAGR.spack=SPACK.fsl-fg=FSL-FG.cltu=cltu1"
+   
+      raf-onlt:
+        host: localhost
+        port: 25711
+        serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.raf=onlt1"
+   
+      raf-onlc:
+        host: localhost 
+        port: 25711
+        serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.raf=onlc1"
+
+   
+ 
+   
+    

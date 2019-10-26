@@ -1,35 +1,39 @@
 package org.yamcs.tctm.sle;
 
 import org.yamcs.sle.Isp1Authentication;
+import org.yamcs.sle.SleAttributes;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.sle.AbstractServiceUserHandler.AuthLevel;
-import org.yamcs.sle.Constants.DeliveryMode;
+import org.yamcs.sle.Isp1Handler.HeartbeatSettings;
 import org.yamcs.utils.StringConverter;
 
 public class SleConfig {
     String host;
     int port;
     Isp1Authentication auth;
-    DeliveryMode deliveryMode;
-    String responderPortId;
-    String initiatorId;
     int versionNumber;
     AuthLevel authLevel;
-    int serviceInstanceNumber;
+    SleAttributes attr;
+    HeartbeatSettings hbSettings = new HeartbeatSettings();
 
-    public SleConfig(YConfiguration config) {
-        host = config.getString("host");
-        port = config.getInt("port");
+    public SleConfig(YConfiguration config, String type) {
+        host = config.getSubString(type, "host");
+        port = config.getInt(type, "port");
 
-        responderPortId = config.getString("responderPortId");
-        initiatorId = config.getString("initiatorId");
-        deliveryMode = config.getEnum("deliveryMode", DeliveryMode.class);
+        String responderPortId = config.getString("responderPortId");
+        String initiatorId = config.getString("initiatorId");
         auth = getAuthentication(config);
         authLevel = config.getEnum("authLevel", AuthLevel.class);
         versionNumber = config.getInt("versionNumber", 5);
-        serviceInstanceNumber = config.getInt("serviceInstanceNumber", 1);
-
+        
+        String serviceInstance = config.getSubString(type, "serviceInstance");
+        attr = new SleAttributes(responderPortId, initiatorId, serviceInstance);
+        hbSettings.minHeartbeatInterval = config.getInt("minHeartbeatInterval", hbSettings.minHeartbeatInterval);
+        hbSettings.maxHeartbeatDeadFactor = config.getInt("maxHeartbeatDeadFactor", hbSettings.maxHeartbeatDeadFactor);
+        hbSettings.heartbeatInterval = config.getInt("heartbeatInterval", hbSettings.heartbeatInterval);
+        hbSettings.heartbeatDeadFactor = config.getInt("heartbeatDeadFactor", hbSettings.heartbeatDeadFactor);
+        hbSettings.authenticationTimeout = config.getInt("authenticationTimeout", hbSettings.authenticationTimeout);
         
     }
     
@@ -41,11 +45,8 @@ public class SleConfig {
             throw new ConfigurationException(
                     "Invalid hash algorithm '" + hashAlgo + "' specified. Supported are SHA-1 and SHA-256");
         }
-
-        YConfiguration sec = YConfiguration.getConfiguration("security");
-        YConfiguration slesec = sec.getConfig("SLE");
-        byte[] myPass = StringConverter.hexStringToArray(slesec.getString(myUsername));
-        byte[] peerPass = StringConverter.hexStringToArray(slesec.getString(peerUsername));
+        byte[] myPass = StringConverter.hexStringToArray(c.getString("myPassword"));
+        byte[] peerPass = StringConverter.hexStringToArray(c.getString("peerPassword"));
         return new Isp1Authentication(myUsername, myPass, peerUsername, peerPass, hashAlgo);
     }
 }

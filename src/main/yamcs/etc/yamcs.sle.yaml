@@ -24,28 +24,28 @@ services:
 
 dataLinks:
   - name: SLE_IN
+    enabledAtStartup: false
     class: org.yamcs.tctm.sle.TmFrameLink
     args:
-       #-------------- SLE config options (TODO: maybe we should put these in a separate file to avoid repeating in case of multiple SLE links)
-       host: localhost #SLE host and port to connect to
-       port: 25711 
-       initiatorId: "mertens"
-       responderPortId: "Harness_Port_1"
-       myUsername: "mertens"
-       peerUsername: "mertens"
-       hashAlgorithm: "SHA-1"  # algorithm used to hash the password: one of SHA-1 or SHA-256
-       authLevel: ALL   # which PDU contain the authentication: one of NONE, BIND or ALL
-       deliveryMode: rtnTimelyOnline # one of rtnTimelyOnline, rtnCompleteOnline or rtnOffline
-       versionNumber: 2  #version number send in bind invocation
+       #This is a name of the section in sle.yaml Providers
+       sleProvider: GS1
+       
+       # one of rtnTimelyOnline, rtnCompleteOnline (or rtnOffline when it will be supported)
+       deliveryMode: rtnTimelyOnline
        
        #------------- FRAME processing config options
        #one of AOS (CCSDS 732.0-B-3), TM (CCSDS 132.0-B-2) or USLP (CCSDS 732.1-B-1)
        frameType: "AOS"
        spacecraftId: 0xAB
        frameLength: 496
-       frameHeaderErrorControlPresent: false #2 bytes of reed-solomon (10,6) in the header of all frames
+       
+       #2 bytes of reed-solomon (10,6) in the header of all frames
+       frameHeaderErrorControlPresent: false 
+       
        insertZoneLength: 0
-       errorCorrection: CRC16 #NONE, CRC16 or CRC32 (only for USLP)
+       
+       #NONE, CRC16 or CRC32 (only for USLP)
+       errorCorrection: CRC16 
        virtualChannels:
           - vcId: 0
             ocfPresent: true
@@ -67,7 +67,31 @@ dataLinks:
             stream: "tm2_realtime"
           #vcId 63 is reserved for idle data and it does not have to be defined
 
-
+  - name: SLE_OUT
+    class: org.yamcs.tctm.sle.TcFrameLink
+    args:
+       #This is a name of the section in sle.yaml Providers
+       sleProvider: GS1
+       spacecraftId: 0xAB
+       maxFrameLength: 1024
+       encoding: BCH
+       virtualChannels:
+         - vcId: 0
+           service: "PACKET" 
+           commandPostprocessorClassName: org.yamcs.tctm.IssCommandPostprocessor
+           commandPostprocessorArgs:
+              errorDetection:
+                  type: 16-SUM
+              enforceEvenNumberOfBytes: true
+           #which yamcs stream to get the data from
+           stream: "tc_realtime"
+           #enable FOP1 (the transmitter part of COP1, see CCSDS 232.1-B-2) for this VC
+           useFop1: true
+           #the name of the stream where the CLCW is received from, mandatory if FOP1 is used
+           clcwStream: "clcw" 
+           #how many seconds to wait at startup for an initial CLCW, before going to state 6(initial).
+           #If not configured or negative, start directly in state 6
+           initialClcwWait: 3600   
 mdb:
   # Configuration of the active loaders
   # Valid loaders are: sheet, xtce or fully qualified name of the class
@@ -84,5 +108,5 @@ streamConfig:
   cmdHist: ["cmdhist_realtime", "cmdhist_dump"]
   event: ["events_realtime", "events_dump"]
   param: ["pp_realtime", "pp_tse", "sys_param"]
-  alarm: ["alarms_realtime"]
+  parameterAlarm: ["alarms_realtime"]
   tc: ["tc_realtime"]

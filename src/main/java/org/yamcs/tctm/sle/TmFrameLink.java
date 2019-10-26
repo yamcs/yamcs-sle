@@ -2,6 +2,7 @@ package org.yamcs.tctm.sle;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ import org.yamcs.sle.Isp1Handler;
 import org.yamcs.sle.RafServiceUserHandler;
 import org.yamcs.sle.RafSleMonitor;
 import org.yamcs.sle.CcsdsTime;
+import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.Constants.LockStatus;
 import org.yamcs.sle.Constants.RafProductionStatus;
 import org.yamcs.tctm.AggregatedDataLink;
@@ -21,9 +23,11 @@ import org.yamcs.tctm.Link;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.MasterChannelFrameHandler;
 import org.yamcs.tctm.ccsds.VcDownlinkHandler;
+import org.yamcs.utils.TimeEncoding;
 
 import com.google.common.util.concurrent.AbstractService;
 
+import ccsds.sle.transfer.service.common.types.Time;
 import ccsds.sle.transfer.service.raf.outgoing.pdus.RafStatusReportInvocation;
 import ccsds.sle.transfer.service.raf.outgoing.pdus.RafTransferDataInvocation;
 import io.netty.bootstrap.Bootstrap;
@@ -53,7 +57,7 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  * <td>one of rtnTimelyOnline, rtnCompleteOnline, rtnOffline</td>
  * </tr>
  * <tr>
- * <td>serviceInstanceNumber</td>
+ * <td>serviceInstance</td>
  * <td>Used in the bind request to select the instance number of the remote service.This number
  * together with the deliverymode specify the so called service name identifier (raf=onltX where X is
  * the number)</td>
@@ -99,10 +103,16 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
     private volatile boolean disabled = false;
     long frameCount = 0;
     RafServiceUserHandler rsuh;
-    
+
     MyConsumer frameConsumer = new MyConsumer();
     RafSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
+    final DeliveryMode deliveryMode;
+    
+ // how soon should reconnect in case the connection to the SLE provider is lost
+    //if negative, do not reconnect
+    int reconnectionIntervalSec;
+
     /**
      * Creates a new UDP Frame Data Link
      * 
@@ -112,7 +122,21 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
     public TmFrameLink(String instance, String name, YConfiguration config) throws ConfigurationException {
         this.yamcsInstance = instance;
         this.name = name;
-        this.sconf = new SleConfig(config);
+
+        YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
+                .getConfig(config.getString("sleProvider"));
+        deliveryMode = config.getEnum("deliveryMode", DeliveryMode.class);
+        String type;
+        if (deliveryMode == DeliveryMode.rtnCompleteOnline) {
+            type = "raf-onlc";
+        } else if (deliveryMode == DeliveryMode.rtnTimelyOnline) {
+            type = "raf-onlt";
+        } else {
+            throw new ConfigurationException("Invalid delivery mode. Use one of rtnCompleteOnline or rtnTimelyOnline");
+        }
+        reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
+        this.sconf = new SleConfig(slec, type);
+
         frameHandler = new MasterChannelFrameHandler(yamcsInstance, name, config);
         eventProducer = EventProducerFactory.getEventProducer(yamcsInstance, "SLE[" + name + "]", 10000);
         subLinks = new ArrayList<>();
@@ -123,9 +147,8 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
                 l.setParent(this);
             }
         }
-    }
 
-  
+    }
 
     @Override
     protected void doStart() {
@@ -146,8 +169,7 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
 
     private synchronized void connect() {
         log.debug("Connecting to SLE RAF service {}:{} as user {}", sconf.host, sconf.port, sconf.auth.getMyUsername());
-        rsuh = new RafServiceUserHandler(sconf.auth, sconf.responderPortId, sconf.initiatorId, sconf.deliveryMode,
-                sconf.serviceInstanceNumber, frameConsumer);
+        rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, frameConsumer);
         rsuh.setVersionNumber(sconf.versionNumber);
         rsuh.setAuthLevel(sconf.authLevel);
         rsuh.addMonitor(sleMonitor);
@@ -160,7 +182,7 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
             @Override
             public void initChannel(SocketChannel ch) throws Exception {
                 ch.pipeline().addLast(new LengthFieldBasedFrameDecoder(8192, 4, 4));
-                ch.pipeline().addLast(new Isp1Handler(true));
+                ch.pipeline().addLast(new Isp1Handler(true, sconf.hbSettings));
                 ch.pipeline().addLast(rsuh);
             }
         });
@@ -168,6 +190,9 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 rsuh = null;
+                if (reconnectionIntervalSec >= 0) {
+                    workerGroup.schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
+                }
             } else {
                 sleBind();
             }
@@ -309,6 +334,16 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
 
     }
 
+    @Override
+    public void resetCounters() {
+        frameCount = 0;
+    }
+
+    private long getTime(Time t) {
+        CcsdsTime ct = CcsdsTime.fromSle(t);
+        return TimeEncoding.fromUnixMillisec(ct.toJavaMillisec());
+    }
+    
     class MyConsumer implements FrameConsumer {
 
         @Override
@@ -334,8 +369,9 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
                             + frameHandler.getMaxFrameSize());
                 } else {
                     frameCount++;
+                    long ertime = getTime(rtdi.getEarthReceiveTime());
 
-                    frameHandler.handleFrame(data, 0, length);
+                    frameHandler.handleFrame(ertime, data, 0, length);
                 }
             } catch (TcTmException e) {
                 eventProducer.sendWarning("Error processing frame: " + e.toString());
@@ -343,6 +379,7 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
                 log.error("Error processing frame", e);
             }
         }
+
 
         @Override
         public void onExcessiveDataBacklog() {
@@ -366,11 +403,5 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
         public void onEndOfData() {
             eventProducer.sendInfo("SLE end of data received");
         }
-    }
-
-    @Override
-    public void resetCounters() {
-        // TODO Auto-generated method stub
-        
     }
 }

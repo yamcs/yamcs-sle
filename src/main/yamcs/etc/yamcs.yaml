@@ -1,11 +1,8 @@
 # System-wide services
 services:
-  - class: org.yamcs.web.HttpServer
+  - class: org.yamcs.http.HttpServer
     args:
       port: 8090
-
-      # Where to find the files for the web interface
-      webRoot: lib/yamcs-web
 
       # Indicates whether zero-copy can be used to optimize non-ssl static file serving
       # Leave this true unless you encounter a specific deployment issue (e.g. some docker hosts)
