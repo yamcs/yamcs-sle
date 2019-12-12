@@ -9,7 +9,7 @@
   <url>http://yamcs.org</url>
 
  <properties>      
-    <yamcsVersion>4.10.5-SNAPSHOT</yamcsVersion>
+    <yamcsVersion>4.10.6-SNAPSHOT</yamcsVersion>
   </properties>
 
    <scm>

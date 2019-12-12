@@ -6,7 +6,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.api.EventProducer;
 import org.yamcs.api.EventProducerFactory;
@@ -24,13 +23,8 @@ import org.yamcs.sle.CltuSleMonitor;
 import org.yamcs.sle.Constants.CltuProductionStatus;
 import org.yamcs.sle.Constants.UplinkStatus;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
-import org.yamcs.tctm.ccsds.TcFrameFactory;
 import org.yamcs.tctm.ccsds.TcTransferFrame;
 import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorCorrection;
-import org.yamcs.tctm.ccsds.error.BchCltuGenerator;
-import org.yamcs.tctm.ccsds.error.CltuGenerator;
-import org.yamcs.tctm.ccsds.error.Ldpc256CltuGenerator;
-import org.yamcs.tctm.ccsds.error.Ldpc64CltuGenerator;
 import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
 import org.yamcs.xtce.util.AggregateMemberNames;
@@ -54,10 +48,9 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  * @author nm
  *
  */
-public class TcFrameLink extends AbstractTcFrameLink {
+public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     FrameErrorCorrection errorCorrection;
-    TcFrameFactory tcFrameFactory;
-    CltuGenerator cltuGenerator;
+
     SleConfig sconf;
 
     private Log log;
@@ -93,6 +86,7 @@ public class TcFrameLink extends AbstractTcFrameLink {
             "uplinkStatus", "numCltuReceived", "numCltuProcessed", "numCltuRadiated", "cltuBufferAvailable" });
 
     private volatile ParameterValue cltuStatus;
+    private Thread thread;
 
     public TcFrameLink(String yamcsInstance, String name, YConfiguration config) {
         super(yamcsInstance, name, config);
@@ -109,18 +103,6 @@ public class TcFrameLink extends AbstractTcFrameLink {
 
         eventProducer = EventProducerFactory.getEventProducer(yamcsInstance, "SLE[" + name + "]", 10000);
 
-        String encoding = config.getString("encoding");
-
-        if ("BCH".equals(encoding)) {
-            cltuGenerator = new BchCltuGenerator(config.getBoolean("randomizeCltu", false));
-        } else if ("LDPC64".equals(encoding)) {
-            cltuGenerator = new Ldpc64CltuGenerator(config.getBoolean("ldpc64Tail", false));
-        } else if ("LDPC256".equals(encoding)) {
-            cltuGenerator = new Ldpc256CltuGenerator();
-        } else {
-            throw new ConfigurationException(
-                    "Invalid value '" + encoding + " for encoding. Valid values are BCH, LDPC64 or LDPC256");
-        }
         sleMonitor = new MyMonitor();
     }
 
@@ -149,7 +131,7 @@ public class TcFrameLink extends AbstractTcFrameLink {
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 csuh = null;
-                if (!disabled && reconnectionIntervalSec >= 0) {
+                if (!isDisabled() && reconnectionIntervalSec >= 0) {
                     workerGroup.schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
                 }
             } else {
@@ -159,16 +141,8 @@ public class TcFrameLink extends AbstractTcFrameLink {
     }
 
     @Override
-    public void triggerShutdown() {
-        if (csuh != null) {
-            csuh.shutdown();
-        }
-        multiplexer.quit();
-    }
-
-    @Override
-    protected void run() throws Exception {
-        while (isRunning()) {
+    public void run() {
+        while (isRunning() && !isDisabled()) {
             if (csuh == null) {
                 connect();
                 continue;
@@ -196,29 +170,13 @@ public class TcFrameLink extends AbstractTcFrameLink {
 
                 int id = csuh.transferCltu(data);
                 pendingFrames.put(id, tf);
-
-                for (PreparedCommand pc : tf.getCommands()) {
-                    commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_REQ_KEY,
-                            TimeEncoding.getWallclockTime(), AckStatus.OK);
+                if (tf.getCommands() != null) {
+                    for (PreparedCommand pc : tf.getCommands()) {
+                        commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_REQ_KEY,
+                                TimeEncoding.getWallclockTime(), AckStatus.OK);
+                    }
                 }
-
             }
-
-        }
-    }
-
-    @Override
-    public void enable() {
-        disabled = false;
-        connect();
-    }
-
-    @Override
-    public void disable() {
-        disabled = true;
-        if (csuh != null) {
-            csuh.shutdown();
-            csuh = null;
         }
     }
 
@@ -332,7 +290,7 @@ public class TcFrameLink extends AbstractTcFrameLink {
 
     @Override
     public Status getLinkStatus() {
-        if (disabled) {
+        if (isDisabled()) {
             return Status.DISABLED;
         }
         if (state() == State.FAILED) {
@@ -346,10 +304,41 @@ public class TcFrameLink extends AbstractTcFrameLink {
         }
     }
 
+    @Override
+    protected void doDisable() {
+        if (thread != null) {
+            thread.interrupt();
+        }
+        if (csuh != null) {
+            csuh.shutdown();
+            csuh = null;
+        }
+    }
+
+    @Override
+    protected void doEnable() {
+        thread = new Thread(this);
+        thread.start();
+        connect();
+    }
+
+    @Override
+    protected void doStart() {
+        doEnable();
+        notifyStarted();
+    }
+
+    @Override
+    protected void doStop() {
+        doDisable();
+        multiplexer.quit();
+        notifyStopped();
+    }
+
     class MyMonitor implements CltuSleMonitor {
         @Override
         public void connected() {
-            System.out.println("sending sle connected info event with "+eventProducer.getClass());
+            System.out.println("sending sle connected info event with " + eventProducer.getClass());
             eventProducer.sendInfo("SLE connected");
         }
 
@@ -437,5 +426,4 @@ public class TcFrameLink extends AbstractTcFrameLink {
             uplinkReadySemaphore.release();
         }
     }
-
 }
