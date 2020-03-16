@@ -10,14 +10,14 @@ import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.api.EventProducer;
 import org.yamcs.api.EventProducerFactory;
-import org.yamcs.sle.FrameConsumer;
-import org.yamcs.sle.Isp1Handler;
-import org.yamcs.sle.RafServiceUserHandler;
-import org.yamcs.sle.RafSleMonitor;
 import org.yamcs.sle.CcsdsTime;
 import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.Constants.LockStatus;
 import org.yamcs.sle.Constants.RafProductionStatus;
+import org.yamcs.sle.FrameConsumer;
+import org.yamcs.sle.Isp1Handler;
+import org.yamcs.sle.RafServiceUserHandler;
+import org.yamcs.sle.RafSleMonitor;
 import org.yamcs.tctm.AggregatedDataLink;
 import org.yamcs.tctm.Link;
 import org.yamcs.tctm.TcTmException;
@@ -39,8 +39,8 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 /**
- * Receives TM frames via SLE.
- * The Virtual Channel configuration is identical with the configuration of {@link TmFrameLink}.
+ * Receives TM frames via SLE. The Virtual Channel configuration is identical with the configuration of
+ * {@link TmFrameLink}.
  * <p>
  * The SLE specific settings are:
  * <table border=1>
@@ -58,25 +58,24 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  * </tr>
  * <tr>
  * <td>serviceInstance</td>
- * <td>Used in the bind request to select the instance number of the remote service.This number
- * together with the deliverymode specify the so called service name identifier (raf=onltX where X is
- * the number)</td>
+ * <td>Used in the bind request to select the instance number of the remote service.This number together with the
+ * deliverymode specify the so called service name identifier (raf=onltX where X is the number)</td>
  * </tr>
  * <tr>
  * versionNumber
- * <td>the version number is sent in the bind invocation. We only support the version of the SLE valid
- * in April-2019; however this field is not checked.</td>
+ * <td>the version number is sent in the bind invocation. We only support the version of the SLE valid in April-2019;
+ * however this field is not checked.</td>
  * <td></td>
  * </tr>
  * <tr>
  * <td>myUsername</td>
- * <td>username that is passed in outgoing SLE messages. A corresponding password has to be specified (in
- * hexadecimal) in the security.yaml file.</td>
+ * <td>username that is passed in outgoing SLE messages. A corresponding password has to be specified (in hexadecimal)
+ * in the security.yaml file.</td>
  * </tr>
  * <tr>
  * <td>peerUsername</td>
- * <td>username that is used to verify the incoming SLE messages. A corresponding password has to be
- * specified (in hexadecimal) in the security.yaml file.</td>
+ * <td>username that is used to verify the incoming SLE messages. A corresponding password has to be specified (in
+ * hexadecimal) in the security.yaml file.</td>
  * </tr>
  * <tr>
  * <td>authLevel</td>
@@ -108,9 +107,9 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
     RafSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
     final DeliveryMode deliveryMode;
-    
- // how soon should reconnect in case the connection to the SLE provider is lost
-    //if negative, do not reconnect
+
+    // how soon should reconnect in case the connection to the SLE provider is lost
+    // if negative, do not reconnect
     int reconnectionIntervalSec;
 
     /**
@@ -343,7 +342,7 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
         CcsdsTime ct = CcsdsTime.fromSle(t);
         return TimeEncoding.fromUnixMillisec(ct.toJavaMillisec());
     }
-    
+
     class MyConsumer implements FrameConsumer {
 
         @Override
@@ -379,7 +378,6 @@ public class TmFrameLink extends AbstractService implements AggregatedDataLink {
                 log.error("Error processing frame", e);
             }
         }
-
 
         @Override
         public void onExcessiveDataBacklog() {
