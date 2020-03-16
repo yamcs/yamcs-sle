@@ -5,7 +5,7 @@ CommonSettings: &CommonSettings
   # which PDU contain the authentication: one of NONE, BIND or ALL  
   authLevel: ALL
 
-  #version number send in bind invocation
+  #version number sent in bind invocation
   versionNumber: 2
   #my username and password. The password is in hexadecimal
   myUsername: "mertens"
@@ -14,12 +14,12 @@ CommonSettings: &CommonSettings
   initiatorId: "mertens"
   responderPortId: "Harness_Port_1"
 
-  #heartbeaet settings 
+  #heartbeat settings 
   minHeartbeatInterval: 10
   maxHeartbeatDeadFactor: 10
   heartbeatInterval: 30
   heartbeatDeadFactor: 3
-  authenticationTimeout: 60    
+  authenticationTimeout: 60
 
 Providers:
   GS1:

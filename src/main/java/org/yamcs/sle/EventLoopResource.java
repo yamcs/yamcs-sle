@@ -1,4 +1,4 @@
-package org.yamcs.tctm.sle;
+package org.yamcs.sle;
 
 import io.netty.channel.nio.NioEventLoopGroup;
 

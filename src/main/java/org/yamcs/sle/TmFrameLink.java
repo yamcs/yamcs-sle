@@ -1,4 +1,4 @@
-package org.yamcs.tctm.sle;
+package org.yamcs.sle;
 
 import java.util.ArrayList;
 import java.util.List;

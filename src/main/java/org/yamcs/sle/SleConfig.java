@@ -1,4 +1,4 @@
-package org.yamcs.tctm.sle;
+package org.yamcs.sle;
 
 import org.yamcs.sle.Isp1Authentication;
 import org.yamcs.sle.SleAttributes;

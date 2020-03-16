@@ -7,13 +7,13 @@ services:
   - class: org.yamcs.archive.ReplayServer
   - class: org.yamcs.archive.IndexServer
   - class: org.yamcs.ProcessorCreatorService
-    args: 
+    args:
       name: "realtime"
-      type: "realtime" 
+      type: "realtime"
   - class: org.yamcs.archive.CommandHistoryRecorder
   - class: org.yamcs.parameterarchive.ParameterArchive
     args:
-      realtimeFiller: 
+      realtimeFiller:
         enabled: false
       backFiller:
         enabled: true
@@ -25,7 +25,7 @@ services:
 dataLinks:
   - name: SLE_IN
     enabledAtStartup: false
-    class: org.yamcs.tctm.sle.TmFrameLink
+    class: org.yamcs.sle.TmFrameLink
     args:
       #This is a name of the section in sle.yaml Providers
       sleProvider: GS1
@@ -60,15 +60,15 @@ dataLinks:
           stripEncapsulationHeader: true # drop the header before passing the packet to the preprocessor
           packetPreprocessorClassName: org.yamcs.tctm.GenericPacketPreprocessor
           packetPreprocessorArgs:
-              timestampOffset: 2 #where to read the 8 bytes timestamp offset from
-              seqCountOffset: 10 #where to read the 4 bytes sequence count from
-              errorDetection: #last two bytes are used for the error detection
-                type: "CRC-16-CCIIT" 
+            timestampOffset: 2 #where to read the 8 bytes timestamp offset from
+            seqCountOffset: 10 #where to read the 4 bytes sequence count from
+            errorDetection: #last two bytes are used for the error detection
+              type: "CRC-16-CCIIT" 
           stream: "tm2_realtime"
         #vcId 63 is reserved for idle data and it does not have to be defined
 
   - name: SLE_OUT
-    class: org.yamcs.tctm.sle.TcFrameLink
+    class: org.yamcs.sle.TcFrameLink
     args:
       #This is a name of the section in sle.yaml Providers
       sleProvider: GS1

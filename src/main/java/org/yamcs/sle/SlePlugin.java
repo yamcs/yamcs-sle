@@ -1,4 +1,4 @@
-package org.yamcs.tctm.sle;
+package org.yamcs.sle;
 
 import org.yamcs.Plugin;
 import org.yamcs.Spec;
