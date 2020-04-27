@@ -91,9 +91,9 @@ public class TmFrameLink extends AbstractTmFrameLink {
     RafSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
     final DeliveryMode deliveryMode;
-    
- // how soon should reconnect in case the connection to the SLE provider is lost
-    //if negative, do not reconnect
+
+    // how soon should reconnect in case the connection to the SLE provider is lost
+    // if negative, do not reconnect
     int reconnectionIntervalSec;
 
     /**
@@ -144,7 +144,7 @@ public class TmFrameLink extends AbstractTmFrameLink {
         rsuh.setVersionNumber(sconf.versionNumber);
         rsuh.setAuthLevel(sconf.authLevel);
         rsuh.addMonitor(sleMonitor);
-        NioEventLoopGroup workerGroup = EventLoopResource.getEventLoop();
+        NioEventLoopGroup workerGroup = getEventLoop();
         Bootstrap b = new Bootstrap();
         b.group(workerGroup);
         b.channel(NioSocketChannel.class);
@@ -191,7 +191,6 @@ public class TmFrameLink extends AbstractTmFrameLink {
         });
     }
 
-
     @Override
     protected void doDisable() {
         if (rsuh != null) {
@@ -205,7 +204,6 @@ public class TmFrameLink extends AbstractTmFrameLink {
         connect();
     }
 
-   
     class MyMonitor implements RafSleMonitor {
 
         @Override
@@ -242,12 +240,16 @@ public class TmFrameLink extends AbstractTmFrameLink {
 
     }
 
-
     private long getTime(Time t) {
         CcsdsTime ct = CcsdsTime.fromSle(t);
         return TimeEncoding.fromUnixMillisec(ct.toJavaMillisec());
     }
-    
+
+    @Override
+    protected Status connectionStatus() {
+        return rsuh != null && rsuh.isConnected() ? Status.OK : Status.UNAVAIL;
+    }
+
     class MyConsumer implements FrameConsumer {
 
         @Override
@@ -284,7 +286,6 @@ public class TmFrameLink extends AbstractTmFrameLink {
             }
         }
 
-
         @Override
         public void onExcessiveDataBacklog() {
             eventProducer.sendWarning("Excessive Data Backlog reported by the SLE provider");
@@ -308,4 +309,5 @@ public class TmFrameLink extends AbstractTmFrameLink {
             eventProducer.sendInfo("SLE end of data received");
         }
     }
+
 }

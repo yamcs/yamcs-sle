@@ -9,7 +9,6 @@ import java.util.concurrent.TimeUnit;
 import org.yamcs.YConfiguration;
 import org.yamcs.api.EventProducer;
 import org.yamcs.api.EventProducerFactory;
-import org.yamcs.cmdhistory.CommandHistoryPublisher;
 import org.yamcs.cmdhistory.CommandHistoryPublisher.AckStatus;
 import org.yamcs.commanding.PreparedCommand;
 import org.yamcs.logging.Log;
@@ -114,7 +113,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
         csuh.setAuthLevel(sconf.authLevel);
         csuh.addMonitor(sleMonitor);
 
-        NioEventLoopGroup workerGroup = EventLoopResource.getEventLoop();
+        NioEventLoopGroup workerGroup = getEventLoop();
         Bootstrap b = new Bootstrap();
         b.group(workerGroup);
         b.channel(NioSocketChannel.class);
@@ -142,7 +141,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
 
     @Override
     public void run() {
-        while (isRunning() && !isDisabled()) {
+        while (isRunningAndEnabled()) {
             if (csuh == null) {
                 connect();
                 continue;
@@ -242,11 +241,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
         }
 
         if (tf.isBypass()) {
-            for (PreparedCommand pc : tf.getCommands()) {
-                commandHistoryPublisher.publishAck(pc.getCommandId(),
-                        CommandHistoryPublisher.ACK_SENT_CNAME_PREFIX,
-                        TimeEncoding.getWallclockTime(), AckStatus.OK);
-            }
+            ackBypassFrame(tf);
         }
 
         for (PreparedCommand pc : tf.getCommands()) {
@@ -256,22 +251,12 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
         uplinkReadySemaphore.release();
     }
 
-    private void failBypassFrame(TcTransferFrame tf, String reason) {
-        for (PreparedCommand pc : tf.getCommands()) {
-            commandHistoryPublisher.publishAck(pc.getCommandId(),
-                    CommandHistoryPublisher.ACK_SENT_CNAME_PREFIX,
-                    TimeEncoding.getWallclockTime(), AckStatus.NOK, "SLE disconnected");
-
-            commandHistoryPublisher.commandFailed(pc.getCommandId(), timeService.getMissionTime(), "SLE disconnected");
-        }
-    }
-
     protected void setupSysVariables() {
         super.setupSysVariables();
         if (sysParamCollector != null) {
-            sv_sleState_id = sysParamCollector.getNamespace() + "/" + name + "/sleState";
-            sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + name + "/numPendingFrames";
-            sp_cltuStatus_id = sysParamCollector.getNamespace() + "/" + name + "/cltuStatus";
+            sv_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
+            sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + linkName + "/numPendingFrames";
+            sp_cltuStatus_id = sysParamCollector.getNamespace() + "/" + linkName + "/cltuStatus";
         }
     }
 
@@ -286,22 +271,6 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
             cltuStatus = null;
         }
         return l;
-    }
-
-    @Override
-    public Status getLinkStatus() {
-        if (isDisabled()) {
-            return Status.DISABLED;
-        }
-        if (state() == State.FAILED) {
-            return Status.FAILED;
-        }
-
-        if (isUplinkPossible()) {
-            return Status.OK;
-        } else {
-            return Status.UNAVAIL;
-        }
     }
 
     @Override
@@ -333,6 +302,11 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
         doDisable();
         multiplexer.quit();
         notifyStopped();
+    }
+
+    @Override
+    protected Status connectionStatus() {
+        return isUplinkPossible() ? Status.OK : Status.UNAVAIL;
     }
 
     class MyMonitor implements CltuSleMonitor {
@@ -426,4 +400,5 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
             uplinkReadySemaphore.release();
         }
     }
+
 }
