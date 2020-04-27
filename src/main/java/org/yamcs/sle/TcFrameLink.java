@@ -17,16 +17,12 @@ import org.yamcs.logging.Log;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersCollector;
-import org.yamcs.sle.Isp1Handler;
-import org.yamcs.sle.CcsdsTime;
-import org.yamcs.sle.CltuServiceUserHandler;
-import org.yamcs.sle.CltuSleMonitor;
 import org.yamcs.sle.Constants.CltuProductionStatus;
 import org.yamcs.sle.Constants.UplinkStatus;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
+import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorCorrection;
 import org.yamcs.tctm.ccsds.TcFrameFactory;
 import org.yamcs.tctm.ccsds.TcTransferFrame;
-import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorCorrection;
 import org.yamcs.tctm.ccsds.error.BchCltuGenerator;
 import org.yamcs.tctm.ccsds.error.CltuGenerator;
 import org.yamcs.tctm.ccsds.error.Ldpc256CltuGenerator;
@@ -298,6 +294,7 @@ public class TcFrameLink extends AbstractTcFrameLink {
         uplinkReadySemaphore.release();
     }
 
+    @Override
     private void failBypassFrame(TcTransferFrame tf, String reason) {
         for (PreparedCommand pc : tf.getCommands()) {
             commandHistoryPublisher.publishAck(pc.getCommandId(),
@@ -308,12 +305,13 @@ public class TcFrameLink extends AbstractTcFrameLink {
         }
     }
 
+    @Override
     protected void setupSysVariables() {
         super.setupSysVariables();
         if (sysParamCollector != null) {
-            sv_sleState_id = sysParamCollector.getNamespace() + "/" + name + "/sleState";
-            sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + name + "/numPendingFrames";
-            sp_cltuStatus_id = sysParamCollector.getNamespace() + "/" + name + "/cltuStatus";
+            sv_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
+            sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + linkName + "/numPendingFrames";
+            sp_cltuStatus_id = sysParamCollector.getNamespace() + "/" + linkName + "/cltuStatus";
         }
     }
 
@@ -349,7 +347,7 @@ public class TcFrameLink extends AbstractTcFrameLink {
     class MyMonitor implements CltuSleMonitor {
         @Override
         public void connected() {
-            System.out.println("sending sle connected info event with "+eventProducer.getClass());
+            System.out.println("sending sle connected info event with " + eventProducer.getClass());
             eventProducer.sendInfo("SLE connected");
         }
 
