@@ -1,17 +1,5 @@
-#Eclipse
 .classpath
 .project
 .settings/
 bin/
-
-#Intellij
-.idea/
-*.iml
-
-/live/
 target/
-server.lock
-make-live-devel-local.sh
-*.xtce.consistency_date
-*.xtce.serialized
-*.log

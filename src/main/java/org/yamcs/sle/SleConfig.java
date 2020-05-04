@@ -1,4 +1,4 @@
-package org.yamcs.tctm.sle;
+package org.yamcs.sle;
 
 import org.yamcs.sle.Isp1Authentication;
 import org.yamcs.sle.SleAttributes;
@@ -29,11 +29,15 @@ public class SleConfig {
         
         String serviceInstance = config.getSubString(type, "serviceInstance");
         attr = new SleAttributes(responderPortId, initiatorId, serviceInstance);
-        hbSettings.minHeartbeatInterval = config.getInt("minHeartbeatInterval", hbSettings.minHeartbeatInterval);
-        hbSettings.maxHeartbeatDeadFactor = config.getInt("maxHeartbeatDeadFactor", hbSettings.maxHeartbeatDeadFactor);
+        
+        //these three settings are not used since we are always the initiator. If ever implementing a SLE provider, they may be useful.
+        //hbSettings.minHeartbeatInterval = config.getInt("minHeartbeatInterval", hbSettings.minHeartbeatInterval);
+        //hbSettings.maxHeartbeatDeadFactor = config.getInt("maxHeartbeatDeadFactor", hbSettings.maxHeartbeatDeadFactor);
+        //hbSettings.authenticationTimeout = config.getInt("authenticationTimeout", hbSettings.authenticationTimeout);
+        
         hbSettings.heartbeatInterval = config.getInt("heartbeatInterval", hbSettings.heartbeatInterval);
         hbSettings.heartbeatDeadFactor = config.getInt("heartbeatDeadFactor", hbSettings.heartbeatDeadFactor);
-        hbSettings.authenticationTimeout = config.getInt("authenticationTimeout", hbSettings.authenticationTimeout);
+       
         
     }
     

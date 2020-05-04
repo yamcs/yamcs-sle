@@ -1,9 +1,7 @@
-package org.yamcs.tctm.sle;
+package org.yamcs.sle;
 
 import java.util.concurrent.TimeUnit;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.sle.FrameConsumer;
@@ -30,10 +28,11 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 /**
- * Receives TM frames via SLE.
- * The Virtual Channel configuration is identical with the configuration of {@link TmFrameLink}.
+ * Receives TM frames via SLE. The Virtual Channel configuration is identical with the configuration of
+ * {@link TmFrameLink}.
  * <p>
- * The SLE specific settings are:
+ * The SLE specific settings are loaded from sle.yaml based on the sleProvider key specified in the link configuration.
+ * The description of the sle.yaml configuration parameters are as follows:
  * <table border=1>
  * <tr>
  * <td>initiatorId</td>
@@ -49,25 +48,24 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  * </tr>
  * <tr>
  * <td>serviceInstance</td>
- * <td>Used in the bind request to select the instance number of the remote service.This number
- * together with the deliverymode specify the so called service name identifier (raf=onltX where X is
- * the number)</td>
+ * <td>Used in the bind request to select the instance number of the remote service.This number together with the
+ * deliverymode specify the so called service name identifier (raf=onltX where X is the number)</td>
  * </tr>
  * <tr>
- * versionNumber
- * <td>the version number is sent in the bind invocation. We only support the version of the SLE valid
- * in April-2019; however this field is not checked.</td>
+ * <td>versionNumber</td>
+ * <td>the version number is sent in the bind invocation. We only support the version of the SLE valid in April-2019;
+ * however this field is not checked.</td>
  * <td></td>
  * </tr>
  * <tr>
  * <td>myUsername</td>
- * <td>username that is passed in outgoing SLE messages. A corresponding password has to be specified (in
- * hexadecimal) in the security.yaml file.</td>
+ * <td>username that is passed in outgoing SLE messages. A corresponding password has to be specified (in hexadecimal)
+ * in the security.yaml file.</td>
  * </tr>
  * <tr>
  * <td>peerUsername</td>
- * <td>username that is used to verify the incoming SLE messages. A corresponding password has to be
- * specified (in hexadecimal) in the security.yaml file.</td>
+ * <td>username that is used to verify the incoming SLE messages. A corresponding password has to be specified (in
+ * hexadecimal) in the security.yaml file.</td>
  * </tr>
  * <tr>
  * <td>authLevel</td>
@@ -82,7 +80,6 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  *
  */
 public class TmFrameLink extends AbstractTmFrameLink {
-    private Logger log = LoggerFactory.getLogger(this.getClass().getName());
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
     RafServiceUserHandler rsuh;
@@ -249,7 +246,8 @@ public class TmFrameLink extends AbstractTmFrameLink {
     protected Status connectionStatus() {
         return rsuh != null && rsuh.isConnected() ? Status.OK : Status.UNAVAIL;
     }
-
+    
+    
     class MyConsumer implements FrameConsumer {
 
         @Override

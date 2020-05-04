@@ -1,4 +1,4 @@
-package org.yamcs.tctm.sle;
+package org.yamcs.sle;
 
 import java.util.List;
 import java.util.Map;
@@ -11,19 +11,16 @@ import org.yamcs.api.EventProducer;
 import org.yamcs.api.EventProducerFactory;
 import org.yamcs.cmdhistory.CommandHistoryPublisher.AckStatus;
 import org.yamcs.commanding.PreparedCommand;
-import org.yamcs.logging.Log;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersCollector;
-import org.yamcs.sle.Isp1Handler;
-import org.yamcs.sle.CcsdsTime;
-import org.yamcs.sle.CltuServiceUserHandler;
-import org.yamcs.sle.CltuSleMonitor;
 import org.yamcs.sle.Constants.CltuProductionStatus;
 import org.yamcs.sle.Constants.UplinkStatus;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
+
 import org.yamcs.tctm.ccsds.TcTransferFrame;
-import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorCorrection;
+import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorDetection;
+
 import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
 import org.yamcs.xtce.util.AggregateMemberNames;
@@ -48,11 +45,10 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  *
  */
 public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
-    FrameErrorCorrection errorCorrection;
+    FrameErrorDetection errorCorrection;
 
     SleConfig sconf;
-
-    private Log log;
+    
     CltuServiceUserHandler csuh;
     CltuSleMonitor sleMonitor;
     EventProducer eventProducer;
@@ -89,9 +85,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
 
     public TcFrameLink(String yamcsInstance, String name, YConfiguration config) {
         super(yamcsInstance, name, config);
-        log = new Log(getClass(), yamcsInstance);
-        log.setContext(name);
-
+       
         maxPendingFrames = config.getInt("maxPendingFrames", 20);
         waitForUplinkMsec = config.getInt("waitForUplinkMsec", 5000);
         reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
@@ -251,6 +245,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
         uplinkReadySemaphore.release();
     }
 
+    @Override
     protected void setupSysVariables() {
         super.setupSysVariables();
         if (sysParamCollector != null) {
@@ -293,7 +288,9 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
 
     @Override
     protected void doStart() {
-        doEnable();
+        if(!isDisabled()) {
+            doEnable();
+        }
         notifyStarted();
     }
 

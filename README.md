@@ -13,7 +13,7 @@ To test it:
 mvn yamcs:run
 ```
 
-This will create one instance called sle. Open a webbrowser connected to http://localhost:8090/, select the sle instance and navigate to the "Links" in the left menu. Also open another window showing the Monitoring -> Events. Disabling/Enabling the link will cause the connection to be closed/estabilished. Once the connection is estabilished, it will immediately perfom the bind SLE operation and if that is successful, the start.
+This will create one instance called sle. Open a web browser connected to http://localhost:8090/, select the sle instance and navigate to the "Links" in the left menu. Also open another window showing the Monitoring -> Events. Disabling/Enabling the link will cause the connection to be closed/established. Once the connection is established, it will immediately perfom the bind SLE operation and if that is successful, the start.
 
 
 
