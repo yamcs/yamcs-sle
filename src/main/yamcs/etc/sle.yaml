@@ -38,3 +38,9 @@ Providers:
       host: localhost 
       port: 25711
       serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.raf=onlc1"
+
+    raf-offl:
+      host: localhost 
+      port: 25711
+      serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.raf=offl1"
+      

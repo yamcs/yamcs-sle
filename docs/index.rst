@@ -15,6 +15,7 @@ The two services are supported by the SLE Internet Protocol for transfer service
 The RAF service is further divided into:
  * RAF online timely - used for retrieval of frames where there is a guarantee timeliness of data - if the receiver of the data cannot process the data fast enough (or the network link towards the receiver is too slow), the provider will drop data.
  * RAF online complete - used for retrieval of frames where the receiver wants to receive complete data at the expense of timeliness. The provider will buffer the data if the receiver is too slow.
+ * RAF offline - used for retrieval of frames stored at the provider.
 
 
 Maintainer
@@ -33,3 +34,4 @@ AGPL
 
   configuration
   link-config
+  request-offline-data

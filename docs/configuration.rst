@@ -98,3 +98,6 @@ serviceInstance (string)
     used (after transformation to binary form) as ``service-instance-identifier`` parameter in the SLE BIND call to identify the service requested to the provider. It is a series of ``sia=value`` separated by dots where sia is a service identifier attribute.
     
     Please ask your SLE provider for the value of this parameter. 
+
+tlmMaxLength (integer)
+    the maximum length in bytes of the Transport Mapping Layer (TML) messages. These are the messages defined in the ISP1 standard for transporting SLE data. If a message larger than this length is received, the connection is closed. On the ESA SLE provider this is configured by the transfer-buffer-size parameter which sets the number of frames that can be transferred in one message. The tlmMaxLength should be set to accomodate that number of frames taking into account the frame size and some 70 bytes overhead per frame.
