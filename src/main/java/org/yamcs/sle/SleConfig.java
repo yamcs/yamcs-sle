@@ -16,7 +16,8 @@ public class SleConfig {
     AuthLevel authLevel;
     SleAttributes attr;
     HeartbeatSettings hbSettings = new HeartbeatSettings();
-
+    int tmlMaxLength = 300*1024;
+    
     public SleConfig(YConfiguration config, String type) {
         host = config.getSubString(type, "host");
         port = config.getInt(type, "port");
@@ -38,7 +39,7 @@ public class SleConfig {
         hbSettings.heartbeatInterval = config.getInt("heartbeatInterval", hbSettings.heartbeatInterval);
         hbSettings.heartbeatDeadFactor = config.getInt("heartbeatDeadFactor", hbSettings.heartbeatDeadFactor);
        
-        
+        tmlMaxLength = config.getInt("versionNumber", tmlMaxLength);
     }
     
     static Isp1Authentication getAuthentication(YConfiguration c) {

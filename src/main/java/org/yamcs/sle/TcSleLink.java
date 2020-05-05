@@ -20,7 +20,7 @@ import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
 
 import org.yamcs.tctm.ccsds.TcTransferFrame;
 import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorDetection;
-
+import org.yamcs.utils.StringConverter;
 import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
 import org.yamcs.xtce.util.AggregateMemberNames;
@@ -44,7 +44,7 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  * @author nm
  *
  */
-public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
+public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     FrameErrorDetection errorCorrection;
 
     SleConfig sconf;
@@ -74,7 +74,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     // if negative, do not reconnect
     int reconnectionIntervalSec;
 
-    org.yamcs.sle.AbstractServiceUserHandler.State sleState;
+    org.yamcs.sle.AbstractServiceUserHandler.State sleState = org.yamcs.sle.AbstractServiceUserHandler.State.UNBOUND;
 
     private String sv_sleState_id, sp_cltuStatus_id, sp_numPendingFrames_id;
     final static AggregateMemberNames cltuStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
@@ -83,7 +83,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     private volatile ParameterValue cltuStatus;
     private Thread thread;
 
-    public TcFrameLink(String yamcsInstance, String name, YConfiguration config) {
+    public TcSleLink(String yamcsInstance, String name, YConfiguration config) {
         super(yamcsInstance, name, config);
        
         maxPendingFrames = config.getInt("maxPendingFrames", 20);
@@ -160,7 +160,9 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
                     }
                     continue;
                 }
-
+                if(log.isTraceEnabled()) {
+                    log.trace("Sending CLTU of size {}: {}", data.length, StringConverter.arrayToHexString(data));
+                }
                 int id = csuh.transferCltu(data);
                 pendingFrames.put(id, tf);
                 if (tf.getCommands() != null) {
@@ -169,6 +171,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
                                 TimeEncoding.getWallclockTime(), AckStatus.OK);
                     }
                 }
+                frameCount++;
             }
         }
     }
@@ -216,7 +219,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     private void sleStart() {
         csuh.start().handle((v, t) -> {
             if (t != null) {
-                eventProducer.sendWarning("Failed to start: " + t.getMessage());
+                eventProducer.sendWarning("Failed to start: " + t);
                 return null;
             }
             log.debug("Successfully started the service");
@@ -246,8 +249,8 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     }
 
     @Override
-    protected void setupSysVariables() {
-        super.setupSysVariables();
+    protected void setupSystemParameters() {
+        super.setupSystemParameters();
         if (sysParamCollector != null) {
             sv_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
             sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + linkName + "/numPendingFrames";
@@ -256,16 +259,13 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     }
 
     @Override
-    public List<ParameterValue> getSystemParameters() {
-        List<ParameterValue> l = super.getSystemParameters();
-        long time = l.get(0).getGenerationTime();
-        l.add(SystemParametersCollector.getPV(sv_sleState_id, time, sleState.name()));
-        l.add(SystemParametersCollector.getPV(sp_numPendingFrames_id, time, pendingFrames.size()));
+    protected void collectSystemParameters(long time, List<ParameterValue> list) {
+        list.add(SystemParametersCollector.getPV(sv_sleState_id, time, sleState.name()));
+        list.add(SystemParametersCollector.getPV(sp_numPendingFrames_id, time, pendingFrames.size()));
         if (cltuStatus != null) {
-            l.add(cltuStatus);
+            list.add(cltuStatus);
             cltuStatus = null;
         }
-        return l;
     }
 
     @Override
@@ -283,11 +283,11 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     protected void doEnable() {
         thread = new Thread(this);
         thread.start();
-        connect();
     }
 
     @Override
     protected void doStart() {
+        setupSystemParameters();
         if(!isDisabled()) {
             doEnable();
         }
@@ -309,7 +309,6 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
     class MyMonitor implements CltuSleMonitor {
         @Override
         public void connected() {
-            System.out.println("sending sle connected info event with " + eventProducer.getClass());
             eventProducer.sendInfo("SLE connected");
         }
 
@@ -331,7 +330,7 @@ public class TcFrameLink extends AbstractTcFrameLink implements Runnable {
         @Override
         public void stateChanged(org.yamcs.sle.AbstractServiceUserHandler.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
-
+            sleState = newState;
         }
 
         @Override
