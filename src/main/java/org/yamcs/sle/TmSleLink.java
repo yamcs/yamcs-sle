@@ -68,7 +68,6 @@ public class TmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doStart() {
-        setupSystemParameters();
         if (!isDisabled()) {
             connect();
         }

@@ -198,8 +198,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     }
 
     @Override
-    protected void setupSystemParameters() {
-        super.setupSystemParameters();
+    public void setupSystemParameters(SystemParametersCollector sysParamCollector) {
+        super.setupSystemParameters(sysParamCollector);
         if (sysParamCollector != null) {
             sp_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
             sp_rafStatus_id = sysParamCollector.getNamespace() + "/" + linkName + "/rafStatus";

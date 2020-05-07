@@ -249,13 +249,11 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     }
 
     @Override
-    protected void setupSystemParameters() {
-        super.setupSystemParameters();
-        if (sysParamCollector != null) {
-            sv_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
-            sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + linkName + "/numPendingFrames";
-            sp_cltuStatus_id = sysParamCollector.getNamespace() + "/" + linkName + "/cltuStatus";
-        }
+    public void setupSystemParameters(SystemParametersCollector sysParamCollector) {
+        super.setupSystemParameters(sysParamCollector);
+        sv_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
+        sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + linkName + "/numPendingFrames";
+        sp_cltuStatus_id = sysParamCollector.getNamespace() + "/" + linkName + "/cltuStatus";
     }
 
     @Override
@@ -287,7 +285,6 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
 
     @Override
     protected void doStart() {
-        setupSystemParameters();
         if(!isDisabled()) {
             doEnable();
         }

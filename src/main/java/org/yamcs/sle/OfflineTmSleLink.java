@@ -69,7 +69,6 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doStart() {
-        setupSystemParameters();
         notifyStarted();
     }
 
