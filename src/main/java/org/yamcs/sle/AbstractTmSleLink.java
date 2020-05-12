@@ -8,14 +8,15 @@ import org.yamcs.YConfiguration;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersCollector;
-import org.yamcs.sle.FrameConsumer;
 import org.yamcs.sle.Isp1Handler;
-import org.yamcs.sle.RafServiceUserHandler;
-import org.yamcs.sle.RafSleMonitor;
 import org.yamcs.sle.CcsdsTime;
 import org.yamcs.sle.Constants.DeliveryMode;
+import org.yamcs.sle.Constants.FrameQuality;
 import org.yamcs.sle.Constants.LockStatus;
-import org.yamcs.sle.Constants.RafProductionStatus;
+import org.yamcs.sle.Constants.ProductionStatus;
+import org.yamcs.sle.user.FrameConsumer;
+import org.yamcs.sle.user.RacfStatusReport;
+import org.yamcs.sle.user.RafServiceUserHandler;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.AbstractTmFrameLink;
 import org.yamcs.utils.StringConverter;
@@ -23,9 +24,6 @@ import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
 import org.yamcs.xtce.util.AggregateMemberNames;
 
-import ccsds.sle.transfer.service.common.types.Time;
-import ccsds.sle.transfer.service.raf.outgoing.pdus.RafStatusReportInvocation;
-import ccsds.sle.transfer.service.raf.outgoing.pdus.RafTransferDataInvocation;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -42,15 +40,15 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     Object packetPreprocessorArgs;
     RafServiceUserHandler rsuh;
 
-    RafSleMonitor sleMonitor = new MyMonitor();
-    final SleConfig sconf;
-    final DeliveryMode deliveryMode;
+    RacfSleMonitor sleMonitor = new MyMonitor();
+    SleConfig sconf;
+    DeliveryMode deliveryMode;
 
     // how soon should reconnect in case the connection to the SLE provider is lost
     // if negative, do not reconnect
     int reconnectionIntervalSec;
     
-    private org.yamcs.sle.AbstractServiceUserHandler.State sleState = org.yamcs.sle.AbstractServiceUserHandler.State.UNBOUND;
+    private org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
     private volatile ParameterValue rafStatus;
     
     private String sp_sleState_id, sp_rafStatus_id;
@@ -64,8 +62,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
      * @throws ConfigurationException
      *             if port is not defined in the configuration
      */
-    public AbstractTmSleLink(String instance, String name, YConfiguration config, DeliveryMode deliveryMode) throws ConfigurationException {
-        super(instance, name, config);
+    public void init(String instance, String name, YConfiguration config, DeliveryMode deliveryMode) throws ConfigurationException {
+        super.init(instance, name, config);
         this.deliveryMode = deliveryMode;
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
@@ -135,25 +133,19 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     abstract void sleStart();
 
   
-    private long getTime(Time t) {
-        CcsdsTime ct = CcsdsTime.fromSle(t);
-        return TimeEncoding.fromUnixMillisec(ct.toJavaMillisec());
-    }
-
     @Override
     protected Status connectionStatus() {
         return rsuh != null && rsuh.isConnected() ? Status.OK : Status.UNAVAIL;
     }
 
     @Override
-    public void acceptFrame(RafTransferDataInvocation rtdi) {
-
+    public void acceptFrame(CcsdsTime ert, AntennaId antennaId, int dataLinkContinuity,
+            FrameQuality frameQuality, byte[] privAnn, byte[] data) {
         if (isDisabled()) {
             log.debug("Ignoring frame received while disabled");
             return;
         }
 
-        byte[] data = rtdi.getData().value;
         int length = data.length;
 
         if (log.isTraceEnabled()) {
@@ -168,7 +160,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
                         + frameHandler.getMaxFrameSize());
             } else {
                 frameCount++;
-                long ertime = getTime(rtdi.getEarthReceiveTime());
+                long ertime = TimeEncoding.fromUnixMillisec(ert.toJavaMillisec());
 
                 frameHandler.handleFrame(ertime, data, 0, length);
             }
@@ -185,7 +177,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     }
 
     @Override
-    public void onProductionStatusChange(RafProductionStatus productionStatusChange) {
+    public void onProductionStatusChange(ProductionStatus productionStatusChange) {
         eventProducer.sendInfo("SLE production satus changed to " + productionStatusChange);
 
     }
@@ -217,9 +209,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
     }
 
-    class MyMonitor implements RafSleMonitor {
+    class MyMonitor implements RacfSleMonitor {
 
-        private RafProductionStatus prodStatus;
+        private ProductionStatus prodStatus;
         private LockStatus subcarrierLockStatus;
         private LockStatus symbolSyncLockStatus;
         private LockStatus carrierLockStatus;
@@ -239,7 +231,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
 
         @Override
-        public void stateChanged(org.yamcs.sle.AbstractServiceUserHandler.State newState) {
+        public void stateChanged(org.yamcs.sle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
         }
@@ -251,11 +243,11 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
 
         @Override
-        public void onRafStatusReport(RafStatusReportInvocation rafStatusReport) {
-            prodStatus = RafProductionStatus.byId(rafStatusReport.getProductionStatus().intValue());
-            carrierLockStatus = LockStatus.byId(rafStatusReport.getCarrierLockStatus().intValue());
-            subcarrierLockStatus = LockStatus.byId(rafStatusReport.getSubcarrierLockStatus().intValue());
-            symbolSyncLockStatus = LockStatus.byId(rafStatusReport.getSymbolSyncLockStatus().intValue());
+        public void onStatusReport(RacfStatusReport rafStatusReport) {
+            prodStatus = rafStatusReport.getProductionStatus();
+            carrierLockStatus = rafStatusReport.getCarrierLockStatus();
+            subcarrierLockStatus = rafStatusReport.getSubcarrierLockStatus();
+            symbolSyncLockStatus = rafStatusReport.getSymbolSyncLockStatus();
             
             AggregateValue tmp = new AggregateValue(rafStatusMembers);
 
@@ -265,9 +257,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             tmp.setMemberValue("symbolSyncLockStatus", ValueUtility.getStringValue(symbolSyncLockStatus.name()));
             
             tmp.setMemberValue("deliveredFrameNumber",
-                    ValueUtility.getSint32Value(rafStatusReport.getDeliveredFrameNumber().intValue()));
+                    ValueUtility.getSint32Value(rafStatusReport.getDeliveredFrameNumber()));
             tmp.setMemberValue("errorFreeFrameNumber",
-                    ValueUtility.getSint32Value(rafStatusReport.getErrorFreeFrameNumber().intValue()));
+                    ValueUtility.getSint32Value(rafStatusReport.getErrorFreeFrameNumber()));
 
             rafStatus = SystemParametersCollector.getPV(sp_rafStatus_id, getCurrentTime(), tmp);
         }

@@ -40,14 +40,14 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<yamcsVersion>4.10.10-SNAPSHOT</yamcsVersion>
+		<yamcsVersion>4.11.0-SNAPSHOT</yamcsVersion>
 	</properties>
 
 	<dependencies>
 		<dependency>
 			<groupId>org.yamcs</groupId>
 			<artifactId>jsle</artifactId>
-			<version>0.7-SNAPSHOT</version>
+			<version>0.8-SNAPSHOT</version>
 		</dependency>
 		<dependency>
 			<groupId>org.yamcs</groupId>

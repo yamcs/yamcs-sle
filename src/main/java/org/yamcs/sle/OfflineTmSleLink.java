@@ -4,7 +4,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
-import org.yamcs.sle.RafSleMonitor;
 import org.yamcs.sle.CcsdsTime;
 import org.yamcs.sle.Constants.DeliveryMode;
 
@@ -57,13 +56,13 @@ import org.yamcs.sle.Constants.DeliveryMode;
  *
  */
 public class OfflineTmSleLink extends AbstractTmSleLink {
-    RafSleMonitor sleMonitor = new MyMonitor();
+    RacfSleMonitor sleMonitor = new MyMonitor();
 
     LinkedBlockingQueue<RequestRange> requestQueue = new LinkedBlockingQueue<>();
 
     
-    public OfflineTmSleLink(String instance, String name, YConfiguration config) throws ConfigurationException {
-        super(instance, name, config, DeliveryMode.rtnOffline);
+    public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
+        super.init(instance, name, config, DeliveryMode.rtnOffline);
         reconnectionIntervalSec = -1;
     }
 

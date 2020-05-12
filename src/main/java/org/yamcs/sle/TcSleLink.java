@@ -7,8 +7,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import org.yamcs.YConfiguration;
-import org.yamcs.api.EventProducer;
-import org.yamcs.api.EventProducerFactory;
 import org.yamcs.cmdhistory.CommandHistoryPublisher.AckStatus;
 import org.yamcs.commanding.PreparedCommand;
 import org.yamcs.parameter.AggregateValue;
@@ -16,6 +14,8 @@ import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersCollector;
 import org.yamcs.sle.Constants.CltuProductionStatus;
 import org.yamcs.sle.Constants.UplinkStatus;
+import org.yamcs.sle.user.CltuServiceUserHandler;
+import org.yamcs.sle.user.CltuSleMonitor;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
 
 import org.yamcs.tctm.ccsds.TcTransferFrame;
@@ -51,7 +51,6 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     
     CltuServiceUserHandler csuh;
     CltuSleMonitor sleMonitor;
-    EventProducer eventProducer;
     Map<Integer, TcTransferFrame> pendingFrames = new ConcurrentHashMap<>();
     public final static String CMDHISTORY_SLE_REQ_KEY = "SLE_REQ";
     public final static String CMDHISTORY_SLE_RADIATED_KEY = "SLE_RADIATED";
@@ -74,7 +73,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     // if negative, do not reconnect
     int reconnectionIntervalSec;
 
-    org.yamcs.sle.AbstractServiceUserHandler.State sleState = org.yamcs.sle.AbstractServiceUserHandler.State.UNBOUND;
+    org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
 
     private String sv_sleState_id, sp_cltuStatus_id, sp_numPendingFrames_id;
     final static AggregateMemberNames cltuStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
@@ -83,8 +82,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     private volatile ParameterValue cltuStatus;
     private Thread thread;
 
-    public TcSleLink(String yamcsInstance, String name, YConfiguration config) {
-        super(yamcsInstance, name, config);
+    public void init(String yamcsInstance, String name, YConfiguration config) {
+        super.init(yamcsInstance, name, config);
        
         maxPendingFrames = config.getInt("maxPendingFrames", 20);
         waitForUplinkMsec = config.getInt("waitForUplinkMsec", 5000);
@@ -94,7 +93,6 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
                 .getConfig(config.getString("sleProvider"));
         sconf = new SleConfig(slec, "cltu");
 
-        eventProducer = EventProducerFactory.getEventProducer(yamcsInstance, "SLE[" + name + "]", 10000);
 
         sleMonitor = new MyMonitor();
     }
@@ -178,7 +176,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
 
     private boolean isUplinkPossible() {
         return (csuh != null) && csuh.isConnected() && pendingFrames.size() < maxPendingFrames
-                && sleState == org.yamcs.sle.AbstractServiceUserHandler.State.ACTIVE
+                && sleState == org.yamcs.sle.State.ACTIVE
                 && prodStatus == CltuProductionStatus.operational;
     }
 
@@ -325,7 +323,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
         }
 
         @Override
-        public void stateChanged(org.yamcs.sle.AbstractServiceUserHandler.State newState) {
+        public void stateChanged(org.yamcs.sle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
         }

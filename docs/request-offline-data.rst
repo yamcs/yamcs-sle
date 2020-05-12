@@ -19,7 +19,7 @@ stop (string)
     
 The start and stop will be passed as parameters to the RAF-START SLE request. The SLE provider will deliver all frames having their Earth Reception Time (ERT) in the [start, stop] time interval, both ends are inclusive. SLE insists that start is strictly smaller than stop so start=stop will not be accepted.
 
-The time passed via API is at nanosecond resolution whereas the time passed in the RAF-START SLE request is at microsecond resolution. SLE version 4 supports picosecond resolution but it is not used by Yamcs when sending the request in order to be also compatible with SLE version 2.
+The time passed via API is at nanosecond resolution whereas the time passed in the RAF-START SLE request is at microsecond or picosecond resolution (depending on the SLE version used).
 
 Note about the leap seconds: the time passed via the API is according to the `Timestamp <https://github.com/protocolbuffers/protobuf/blob/master/src/google/protobuf/timestamp.proto>`_ prtobuf message and it is passed "unsmeared" to the SLE request. This is different from the normal requests to Yamcs where the time is transformed into internal Yamcs time (but at millisecond resolution!) by performing reverse smearing around the leap seconds.
 This means that it is not possible to specify a retrieval that starts or stops on a leap second. For example "2016-12-31T23:59:60Z" will be effectively translated into "2017-01-01T00:00:00Z".

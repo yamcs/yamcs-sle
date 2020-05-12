@@ -1,11 +1,10 @@
 package org.yamcs.sle;
 
 import org.yamcs.sle.Isp1Authentication;
-import org.yamcs.sle.SleAttributes;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
-import org.yamcs.sle.AbstractServiceUserHandler.AuthLevel;
 import org.yamcs.sle.Isp1Handler.HeartbeatSettings;
+import org.yamcs.sle.user.SleAttributes;
 import org.yamcs.utils.StringConverter;
 
 public class SleConfig {

@@ -2,7 +2,6 @@ package org.yamcs.sle;
 
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
-import org.yamcs.sle.RafSleMonitor;
 import org.yamcs.tctm.ccsds.UdpTmFrameLink;
 import org.yamcs.sle.Constants.DeliveryMode;
 
@@ -59,10 +58,10 @@ import org.yamcs.sle.Constants.DeliveryMode;
  *
  */
 public class TmSleLink extends AbstractTmSleLink {
-    RafSleMonitor sleMonitor = new MyMonitor();
+    RacfSleMonitor sleMonitor = new MyMonitor();
     
-    public TmSleLink(String instance, String name, YConfiguration config) throws ConfigurationException {
-        super(instance, name, config, config.getEnum("deliveryMode", DeliveryMode.class));
+    public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
+        super.init(instance, name, config, config.getEnum("deliveryMode", DeliveryMode.class));
         reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
     }
 
