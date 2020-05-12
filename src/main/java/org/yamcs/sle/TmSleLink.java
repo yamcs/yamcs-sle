@@ -67,7 +67,7 @@ import org.yamcs.sle.user.RcfServiceUserHandler;
  * <tr>
  * <tr>
  * <td>deliveryMode</td>
- * <td>one of rtnTimelyOnline, rtnCompleteOnline or rtnOffline</td>
+ * <td>one of timely, or complete</td>
  * </tr>
  * <tr>
  * 
@@ -81,8 +81,19 @@ public class TmSleLink extends AbstractTmSleLink {
     RacfSleMonitor sleMonitor = new MyMonitor();
 
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
-        super.init(instance, name, config, config.getEnum("deliveryMode", DeliveryMode.class));
+        super.init(instance, name, config, getDeliveryMode(config));
         reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
+    }
+
+    private DeliveryMode getDeliveryMode(YConfiguration config) {
+        String dm = config.getString("deliveryMode");
+        if("timely".equalsIgnoreCase(dm)) {
+            return DeliveryMode.rtnTimelyOnline;
+        } else if ("complete".equalsIgnoreCase(dm)) {
+            return DeliveryMode.rtnCompleteOnline;
+        } else {
+            throw new ConfigurationException("Invalid value '"+dm+"' for deliverMode. Please use 'timely' or 'complete'");
+        }
     }
 
     @Override

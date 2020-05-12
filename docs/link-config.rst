@@ -9,7 +9,7 @@ After having specified the SLE properties in ``sle.yaml`` a link configuration i
         - name: SLE_IN
           class: org.yamcs.sle.TmSleLink
           sleProvider: GS1
-          deliveryMode: rtnTimelyOnline
+          deliveryMode: timely
           service: RAF
           <frame processing specific parameters>
             
@@ -42,8 +42,8 @@ rcfVcId
 
 deliveryMode(string)
      **used and required for the TmSleLink** to select between complete and timely modes. It can have one of the following values:
-        - ``rtnCompleteOnline``
-        - ``rtnTimelyOnline``
+        - ``compete``
+        - ``timely``
         
 
 reconnectionIntervalSec(integer)
