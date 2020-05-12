@@ -15,8 +15,10 @@ import org.yamcs.sle.Constants.FrameQuality;
 import org.yamcs.sle.Constants.LockStatus;
 import org.yamcs.sle.Constants.ProductionStatus;
 import org.yamcs.sle.user.FrameConsumer;
+import org.yamcs.sle.user.RacfServiceUserHandler;
 import org.yamcs.sle.user.RacfStatusReport;
 import org.yamcs.sle.user.RafServiceUserHandler;
+import org.yamcs.sle.user.RcfServiceUserHandler;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.AbstractTmFrameLink;
 import org.yamcs.utils.StringConverter;
@@ -38,58 +40,78 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements FrameConsumer {
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
-    RafServiceUserHandler rsuh;
+    RacfServiceUserHandler rsuh;
 
     RacfSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
     DeliveryMode deliveryMode;
-
+    String service;
+    
     // how soon should reconnect in case the connection to the SLE provider is lost
     // if negative, do not reconnect
     int reconnectionIntervalSec;
-    
+
     private org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
     private volatile ParameterValue rafStatus;
-    
+
     private String sp_sleState_id, sp_rafStatus_id;
     final static AggregateMemberNames rafStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
-            "carrierLockStatus", "subcarrierLockStatus", "symbolSyncLockStatus", "deliveredFrameNumber", "errorFreeFrameNumber"});
+            "carrierLockStatus", "subcarrierLockStatus", "symbolSyncLockStatus", "deliveredFrameNumber",
+            "errorFreeFrameNumber" });
+
+    // if null-> RAF, otherwise RCF
+    GVCID gvcid = null;
 
     /**
      * Creates a new UDP Frame Data Link
-     * @param deliveryMode 
+     * 
+     * @param deliveryMode
      * 
      * @throws ConfigurationException
      *             if port is not defined in the configuration
      */
-    public void init(String instance, String name, YConfiguration config, DeliveryMode deliveryMode) throws ConfigurationException {
+    public void init(String instance, String name, YConfiguration config, DeliveryMode deliveryMode)
+            throws ConfigurationException {
         super.init(instance, name, config);
         this.deliveryMode = deliveryMode;
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
-
+        service = config.getString("service", "RAF");
+        gvcid = null;
+        if ("RCF".equals(service)) {
+            int tfVersion = config.getInt("rcfTfVersion", frameHandler.getFrameType().getVersion());
+            int spacecraftId = config.getInt("rcfSpacecraftId", frameHandler.getSpacecraftId());
+            int vcId = config.getInt("rcfVcId", -1);
+            gvcid = new GVCID(tfVersion, spacecraftId, vcId);
+        } else if (!"RAF".equals(service)) {
+            throw new ConfigurationException("Invalid service '" + service + "' specified. Use one of RAF or RCF");
+        }
         String type;
         switch (deliveryMode) {
         case rtnCompleteOnline:
-            type = "raf-onlc";
+            type = gvcid == null ? "raf-onlc" : "rcf-onlc";
             break;
         case rtnTimelyOnline:
-            type = "raf-onlt";
+            type = gvcid == null ? "raf-onlt" : "rcf-onlt";
             break;
         case rtnOffline:
-            type = "raf-offl";
+            type = gvcid == null ? "raf-offl" : "rcf-offl";
             break;
-         default:
-             throw new ConfigurationException("Invalid delivery mode "+deliveryMode+" for this data link");
+        default:
+            throw new ConfigurationException("Invalid delivery mode " + deliveryMode + " for this data link");
 
         }
         this.sconf = new SleConfig(slec, type);
-        
+
     }
 
     protected synchronized void connect() {
-        log.debug("Connecting to SLE RAF service {}:{} as user {}", sconf.host, sconf.port, sconf.auth.getMyUsername());
-        rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
+        log.debug("Connecting to SLE {} service {}:{} as user {}", service, sconf.host, sconf.port, sconf.auth.getMyUsername());
+        if(gvcid==null) {
+            rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
+        } else {
+            rsuh = new RcfServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
+        }
         rsuh.setVersionNumber(sconf.versionNumber);
         rsuh.setAuthLevel(sconf.authLevel);
         rsuh.addMonitor(sleMonitor);
@@ -132,10 +154,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     abstract void sleStart();
 
-  
     @Override
     protected Status connectionStatus() {
-        return rsuh != null && rsuh.isConnected() ? Status.OK : Status.UNAVAIL;
+        return (rsuh != null && rsuh.getState() == org.yamcs.sle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
     }
 
     @Override
@@ -198,7 +219,6 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
     }
 
-
     @Override
     protected void collectSystemParameters(long time, List<ParameterValue> list) {
         super.collectSystemParameters(time, list);
@@ -248,14 +268,14 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             carrierLockStatus = rafStatusReport.getCarrierLockStatus();
             subcarrierLockStatus = rafStatusReport.getSubcarrierLockStatus();
             symbolSyncLockStatus = rafStatusReport.getSymbolSyncLockStatus();
-            
+
             AggregateValue tmp = new AggregateValue(rafStatusMembers);
 
             tmp.setMemberValue("productionStatus", ValueUtility.getStringValue(prodStatus.name()));
             tmp.setMemberValue("carrierLockStatus", ValueUtility.getStringValue(carrierLockStatus.name()));
             tmp.setMemberValue("subcarrierLockStatus", ValueUtility.getStringValue(subcarrierLockStatus.name()));
             tmp.setMemberValue("symbolSyncLockStatus", ValueUtility.getStringValue(symbolSyncLockStatus.name()));
-            
+
             tmp.setMemberValue("deliveredFrameNumber",
                     ValueUtility.getSint32Value(rafStatusReport.getDeliveredFrameNumber()));
             tmp.setMemberValue("errorFreeFrameNumber",

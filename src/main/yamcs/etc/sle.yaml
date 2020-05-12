@@ -3,7 +3,7 @@ CommonSettings: &CommonSettings
   hashAlgorithm: "SHA-1"
 
   # which PDU contain the authentication: one of NONE, BIND or ALL  
-  authLevel: ALL
+  authLevel: BIND
 
   #version number sent in bind invocation
   versionNumber: 2
@@ -21,7 +21,7 @@ CommonSettings: &CommonSettings
 Providers:
   GS1:
     <<: *CommonSettings
-    peerUsername: "proxy"
+    peerUsername: "jsle-bridge"
     peerPassword: AB0102030405060708090a0b0c0d0e0f
 
     cltu:
@@ -43,4 +43,19 @@ Providers:
       host: localhost 
       port: 25711
       serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.raf=offl1"
+      
+    rcf-onlt:
+      host: localhost
+      port: 25711
+      serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.rcf=onlt1"
+
+    rcf-onlc:
+      host: localhost 
+      port: 25711
+      serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.rcf=onlc1"
+
+    rcf-offl:
+      host: localhost 
+      port: 25711
+      serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.rcf=offl1"
       

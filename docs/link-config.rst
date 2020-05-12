@@ -8,10 +8,10 @@ After having specified the SLE properties in ``sle.yaml`` a link configuration i
     dataLinks:
         - name: SLE_IN
           class: org.yamcs.sle.TmSleLink
-          args:
-              sleProvider: GS1
-              deliveryMode: rtnTimelyOnline
-              <frame processing specific parameters>
+          sleProvider: GS1
+          deliveryMode: rtnTimelyOnline
+          service: RAF
+          <frame processing specific parameters>
             
 
 
@@ -26,10 +26,25 @@ class(string)
 sleProvider(string)
     the name of a provider defined in ``sle.yaml`` file.
 
+service(string)
+    used the TmSleLink or OfflineTmSleLink to chose between ``RAF`` and ``RCF`` SLE services. If the RCF service is used, the request sent with the SLE START includes the triplet (TransferFrameVersionNumber, SpacecraftId, VirtualChannelId). The values for the TransferFrameVersionNumber and SpacecraftId parameters are normally derived from the frame processing configuration but can be overriden by the options below. Overriding them will most likely result in an invalid configuration. The value of the VirtualChannelId is by default -1 meaning all VCs are requested but can be restricted to only one VC with the option below.
+    
+    Default: RAF
+    
+rcfTfVersion(integer)
+    used for TmSleLink or OfflineTmSleLink if the ``service`` is RCF. It can override the Transfer Frame Version Number which is otherwise derived from the ``frameType`` parameter part of the frame processing configuration.
+
+rcfSpacecraftId(integer)
+    used for TmSleLink or OfflineTmSleLink if the ``service`` is RCF. It can override the Spacraft Id which is otherwise the one specified ``spacraftId`` parameter part of the frame processing configuration.
+
+rcfVcId
+    used for TmSleLink or OfflineTmSleLink if the ``service`` is RCF. The Virtual Channel requested via RCF. By default it is -1 meaning all Virtual Channels for the defined spacraft. There is validation that this virtual chanel is defined in the ``virtualChannels`` parameter part of the frame processing configuration.
+
 deliveryMode(string)
-    only used for the online RAF service (TmSleLink) to select between complete and timely modes. It can have one of the following values:
+     **used and required for the TmSleLink** to select between complete and timely modes. It can have one of the following values:
         - ``rtnCompleteOnline``
         - ``rtnTimelyOnline``
+        
 
 reconnectionIntervalSec(integer)
     used for the online RAF service (TmSleLink) and CLTU service (TcSleLink) to select the reconnection interval. If the connection to the SLE provider breaks, Yamcs will attempt to reconnect after that many seconds.

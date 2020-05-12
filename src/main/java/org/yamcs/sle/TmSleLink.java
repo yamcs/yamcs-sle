@@ -1,9 +1,14 @@
 package org.yamcs.sle;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.tctm.ccsds.UdpTmFrameLink;
+
 import org.yamcs.sle.Constants.DeliveryMode;
+import org.yamcs.sle.user.RafServiceUserHandler;
+import org.yamcs.sle.user.RcfServiceUserHandler;
 
 /**
  * Receives TM frames via SLE. The Virtual Channel configuration is identical with the configuration of
@@ -20,16 +25,6 @@ import org.yamcs.sle.Constants.DeliveryMode;
  * <td>responderPortId</td>
  * <td>Responder Port Identifier</td>
  * </tr>
- * <tr>
- * <td>deliveryMode</td>
- * <td>one of rtnTimelyOnline, rtnCompleteOnline</td>
- * </tr>
- * <tr>
- * <td>serviceInstance</td>
- * <td>Used in the bind request to select the instance number of the remote service.This number together with the
- * deliverymode specify the so called service name identifier (raf=onltX where X is the number)</td>
- * </tr>
- * <tr>
  * <td>versionNumber</td>
  * <td>the version number is sent in the bind invocation. We only support the version of the SLE valid in April-2019;
  * however this field is not checked.</td>
@@ -50,6 +45,31 @@ import org.yamcs.sle.Constants.DeliveryMode;
  * <td>one of NONE, BIND or ALL - it configures which incoming and outgoing PDUs contain authentication
  * information.</td>
  * </tr>
+ * <tr>
+ * <td>service</td>
+ * <td>One of RAF (return all frames) or RCF (return channel frames).</td>
+ * </tr>
+ * <tr>
+ * <td>rcfTfVersion</td>
+ * <td>Specifies the requested frame version number (0=TM, 1=AOS, 12=USLP).
+ * If this option is not used, the frame version number will be derived from the frameType. If specfied, no validation
+ * is performed but sent as configured to the SLE provider.</td>
+ * </tr>
+ * <tr>
+ * <tr>
+ * <td>rcfSpacecraftId</td>
+ * <td>Specifies the number sent as part of the RCF request to the SLE provider. If not specified the spacecraftId will be used.</td>
+ * </tr>
+ * <tr>
+ * <td>rcfVcId</td>
+ * <td>Specifies the virtual channel sent as part of the RCF request. If not specified, or if negative, the request will be sent for all VCs</td>
+ * </tr>
+ * <tr>
+ * <tr>
+ * <td>deliveryMode</td>
+ * <td>one of rtnTimelyOnline, rtnCompleteOnline or rtnOffline</td>
+ * </tr>
+ * <tr>
  * 
  * </table>
  * 
@@ -59,7 +79,7 @@ import org.yamcs.sle.Constants.DeliveryMode;
  */
 public class TmSleLink extends AbstractTmSleLink {
     RacfSleMonitor sleMonitor = new MyMonitor();
-    
+
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
         super.init(instance, name, config, config.getEnum("deliveryMode", DeliveryMode.class));
         reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
@@ -83,7 +103,13 @@ public class TmSleLink extends AbstractTmSleLink {
     }
 
     protected void sleStart() {
-        rsuh.start().handle((v, t) -> {
+        CompletableFuture<Void> cf;
+        if(gvcid==null) {
+           cf = ((RafServiceUserHandler)rsuh).start();  
+        } else {
+            cf = ((RcfServiceUserHandler)rsuh).start(gvcid);
+        }
+        cf.handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to start: " + t.getMessage());
                 return null;
@@ -104,7 +130,6 @@ public class TmSleLink extends AbstractTmSleLink {
     protected void doEnable() throws Exception {
         connect();
     }
-
 
     @Override
     public void onEndOfData() {

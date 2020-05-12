@@ -1,11 +1,14 @@
 package org.yamcs.sle;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.sle.CcsdsTime;
 import org.yamcs.sle.Constants.DeliveryMode;
+import org.yamcs.sle.user.RafServiceUserHandler;
+import org.yamcs.sle.user.RcfServiceUserHandler;
 
 /**
  * Receives TM frames via SLE. The Virtual Channel configuration is identical with the configuration of
@@ -88,7 +91,13 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
             rsuh = null;
         } else {
             eventProducer.sendInfo("Starting an offline request for interval "+rr);
-            rsuh.start(rr.start, rr.stop).handle((v, t) -> {
+            CompletableFuture<Void> cf;
+            if(gvcid==null) {
+               cf = ((RafServiceUserHandler)rsuh).start(rr.start, rr.stop);  
+            } else {
+                cf = ((RcfServiceUserHandler)rsuh).start(rr.start, rr.stop, gvcid);
+            }
+            cf.handle((v, t) -> {
                 if (t != null) {
                     eventProducer.sendWarning("Request for interval "+rr+" failed: "+t );
                     //we can do nothing about it, try maybe there is a new request
