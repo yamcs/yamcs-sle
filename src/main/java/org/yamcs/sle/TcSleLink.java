@@ -98,7 +98,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     }
 
     private synchronized void connect() {
-        log.info("Connecting to SLE FCLTU service {}:{} as user {}", sconf.host, sconf.port,
+        eventProducer.sendInfo("Connecting to SLE FCLTU service "+sconf.host+":"+sconf.port+" as user "+
                 sconf.auth.getMyUsername());
         csuh = new CltuServiceUserHandler(sconf.auth, sconf.attr);
         csuh.setVersionNumber(sconf.versionNumber);
@@ -140,9 +140,13 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
             }
             TcTransferFrame tf = multiplexer.getFrame();
             if (tf != null) {
-                log.trace("New TC frame: {}", tf);
+                
 
                 byte[] data = tf.getData();
+                if(log.isTraceEnabled()) {
+                    log.trace("New TC frame: {}\n\tdata: {}", tf, StringConverter.arrayToHexString(data));
+                }
+                
                 if (cltuGenerator != null) {
                     data = cltuGenerator.makeCltu(data);
                 }
@@ -240,7 +244,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
         }
 
         for (PreparedCommand pc : tf.getCommands()) {
-            commandHistoryPublisher.publish(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, time.toString());
+            commandHistoryPublisher.publish(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, time.toStringPico());
         }
 
         uplinkReadySemaphore.release();
