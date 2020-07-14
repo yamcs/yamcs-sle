@@ -106,7 +106,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     }
 
     protected synchronized void connect() {
-        log.debug("Connecting to SLE {} service {}:{} as user {}", service, sconf.host, sconf.port, sconf.auth.getMyUsername());
+        eventProducer.sendInfo("Connecting to SLE "+service+" service "+sconf.host+":"+sconf.port+" as user "+sconf.auth.getMyUsername());
         if(gvcid==null) {
             rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
         } else {
