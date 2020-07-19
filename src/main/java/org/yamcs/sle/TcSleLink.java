@@ -233,6 +233,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     private void onCltuRadiated(CltuOk cltuOk) {
         int cltuId = cltuOk.getCltuIdentification().value.intValue();
         CcsdsTime time = CcsdsTime.fromSle(cltuOk.getRadiationStopTime());
+        long yamcsTime = TimeEncoding.fromUnixMillisec(time.toJavaMillisec());
         TcTransferFrame tf = pendingFrames.remove(cltuId);
         if (tf == null) {
             log.warn("Received cltu-radiated event for unknown cltuId {}", cltuId);
@@ -244,7 +245,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
         }
 
         for (PreparedCommand pc : tf.getCommands()) {
-            commandHistoryPublisher.publish(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, time.toStringPico());
+            commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, yamcsTime, AckStatus.OK, time.toStringPico());
         }
 
         uplinkReadySemaphore.release();
