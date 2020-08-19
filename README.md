@@ -17,10 +17,5 @@ This will create one instance called sle. Open a web browser connected to http:/
 
 
 
-## TODO:
-- make a REST interface to allow specifying start/stop times for retrieving offline data.
-- send parameters of the SLE as yamcs parameters to allow monitoring the status in the normal displays.
-- implement the RCF (this should be very simple)
-
 
 ![](yamcs-connected-to-sle.png?raw=true)
