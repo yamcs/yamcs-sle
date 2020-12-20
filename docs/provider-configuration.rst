@@ -1,7 +1,7 @@
 Provider Configuration
 ======================
 
-SLE Providers are configured in ``etc/sle.yaml``. Specific link entries refer to one of the named providers by name.
+SLE Providers are configured in ``etc/sle.yaml``. Data link configuration in yamcs.instance.yaml refer to one of the providers defined in this file.
 
 An example of provider configuration is here below:
 
@@ -40,9 +40,9 @@ An example of provider configuration is here below:
                 serviceInstance: "sagr=9999.spack=ABC-PERM.rsl-fg=1.raf=onlc1"
 
 
-The section ``Providers`` contains a map with each SLE provider (e.g. ground station). This contains a section with general settings followed by a specific cltu, raf-ontl and raf-onlc sections containing connection parameters for the CLTU service, RAF online timely, respectively RAF online complete services.
+The section ``Providers`` contains a map with each SLE provider (e.g. ground station). This contains a section with general settings followed by a specific cltu, raf-ontl, raf-onlc, rcf-ontl, rcf-onlc sections containing connection parameters for the CLTU service, RAF/RCF online timely, respectively RAF/RCF online complete services.
 
-In the example above the ``CommonSettings`` block is included into the SMILE3 provider block using the yaml node achor and reference feature. This feature (pure yaml functionality, not specific to SLE) allows in this instance grouping common settings for multiple ground stations into one definition.
+In the example above the ``CommonSettings`` block is included into the SMILE3 provider block using the yaml node achor and reference feature. This feature (pure yaml functionality, not specific to SLE) allows grouping common settings for multiple ground stations into one definition.
 
 
 Provider Options
@@ -50,25 +50,25 @@ Provider Options
 
 hashAlgorithm  (string)
     | One of ``SHA-1`` or ``SHA-256``.
-    | The hashAlgorithm is effectively passed to the `MessageDigest.getInstance(hashAlgorithm) <https://docs.oracle.com/javase/8/docs/api/java/security/MessageDigest.html#getInstance-java.lang.String>`_ method in Java. Only SHA-1 has been tested since the SHA-256 is not supported (as of 2020) by the ESA SLE software.
+    | The hashAlgorithm is effectively passed to the `MessageDigest.getInstance(hashAlgorithm) <https://docs.oracle.com/javase/8/docs/api/java/security/MessageDigest.html#getInstance-java.lang.String>`_ method in Java. Only SHA-1 has been tested since the SHA-256 was not supported (as of 2020) by the ESA SLE software.
     
 authLevel (string)
     | One of: ``ALL``, ``BIND`` or ``NONE``.    
-    | The SLE messages can be optionally authenticated by inserting a ``invoker-credentials`` token in the SLE message. This option specifies which messages sent by us are authenticated (i.e. contain this token). It also specifies which of the peer messages are expected to be authenticated.
+    | The SLE messages can be optionally authenticated by inserting a ``invoker-credentials`` token in the SLE message. This option specifies which messages sent by Yamcs are authenticated (i.e. contain this token). It also specifies which of the peer messages are expected to be authenticated.
     | **Important:** the SLE security mechanism does not prevent man-in-the-middle attacks and other type of security attacks and therefore it is advisable to protect the transport at TCP level by other means (e.g. VPN).
     | For details: see Chapter 8 Security Aspects of the SLE Forward CLTU Transfer Service in the CCSDS specification.
 
 versionNumber (integer)
-    2, 3 or 4. This is the version number that is being passed in the BIND call. Note that there is no code to handle specifically any version but the versions 2-4 are of SLE are belived to be compatible as far as the user (i.e. Yamcs) is concerned; the differences are mostly to do with new options being added in the newer versions. Those options are currently not accessible from the Yamcs SLE link.
+    2, 3 or 4. This is the version number passed in the BIND call. Note that there is no code to handle specifically any version but the SLE versions 2-4 SLE are belived to be compatible as far as the user (i.e. Yamcs) is concerned; the differences are mostly to do with new options being added in the newer versions. Those options are currently not accessible from the Yamcs SLE link.
 
 myUsername (string)
-    the username that is used to build the credentials token part of ISP1 authentication if the authLevel is ALL or BIND.
+    the username  used to build the credentials token part of ISP1 authentication if the authLevel is ALL or BIND.
     
 myPassword (hexadecimal string)
      used together with the myUsername for the ISP1 authentication.
 
 peerUsername (string)
-    the username of the peer. It is used to verify the peer credential tokens. Depending on the authLevel, all messages, the bind return or no message will be authenticated.
+    the username of the peer. It is used to verify the peer credential tokens. Depending on the ``authLevel``, all messages, the bind return or no message will be authenticated.
 
 peerPassword (hexadecimal string)
     used together with the username for verifying the peer suplied credential token.
@@ -80,10 +80,10 @@ responderPortId (string)
     this property species the value of the ``responder-port-identifier`` parameter passed as part of the BIND SLE message.
  
 heartbeatInterval (integer number of seconds)
-    this property specifies the value proposed to the peer for the ISP1 heartbeat interval. The SLE provide will check this against its accepted range and it will close the connection if the value sent by us is not within the accepted range.
+    this property specifies the value proposed to the peer for the ISP1 heartbeat interval. The SLE provide will check this against its accepted range and it will close the connection if the value sent by Yamcs is not within the accepted range.
     
 heartbeatDeadFactor (integer)
-    defines the number of heartbeat intervals when no message has been received from the peer, after which a TCP connection is considered dead and is closed.
+    defines the number of heartbeat intervals without a message from peer after which a TCP connection is considered dead and is closed.
 
 
 Service-specific Options
@@ -101,4 +101,6 @@ serviceInstance (string)
     Ask your SLE provider for the value of this parameter. 
 
 tmlMaxLength (integer)
-    the maximum length in bytes of the Transport Mapping Layer (TML) messages. These are the messages defined in the ISP1 standard for transporting SLE data. If a message larger than this length is received, the connection is closed. On the ESA SLE provider this is configured by the transfer-buffer-size parameter which sets the number of frames that can be transferred in one message. The tmlMaxLength should be set to accomodate that number of frames taking into account the frame size and some 70 bytes overhead per frame.
+    the maximum length in bytes of the Transport Mapping Layer (TML) messages. These are the messages defined in the ISP1 standard for transporting SLE data. If a message larger than this length is received, the connection is closed.
+    
+    On the ESA SLE provider this is configured by the transfer-buffer-size parameter which sets the number of frames which can be transferred in one message. The tmlMaxLength should be set to accomodate that number of frames taking into account the frame size and some 70 bytes overhead per frame.

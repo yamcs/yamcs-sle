@@ -14,7 +14,7 @@ Specify SLE properties in ``etc/sle.yaml``, and add a link entry to ``etc/yamcs.
     dataLinks:
         - name: SLE_OUT
           class: org.yamcs.sle.TcSleLink
-          # options
+          sleProvider: GS1
 
 
 Options
