@@ -7,7 +7,7 @@ Offline RAF service. This link does not retrieve any data by itself. Instead it 
 Usage
 -----
 
-Specify SLE properties in ``sle.yaml``, and add a link entry to ``etc/yamcs.[instance].yaml``:
+Specify SLE properties in ``etc/sle.yaml``, and add a link entry to ``etc/yamcs.[instance].yaml``:
 
 .. code-block:: yaml
 
@@ -21,8 +21,9 @@ Options
 -------
 
 sleProvider (string)
-    **Required.** The name of a provider defined in the ``sle.yaml`` configuration file.
+    **Required.** The name of a provider defined in the ``etc/sle.yaml`` configuration file.
 
 .. include:: _includes/tm-options.rst
 
-Other available link options are general frame processing parameters as specified at :yamcs-manual:`links/ccsds-frame-processing`.
+.. note::
+    Other available link options are general frame processing parameters as specified at :yamcs-manual:`links/ccsds-frame-processing`.

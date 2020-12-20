@@ -8,8 +8,6 @@ import org.yamcs.YConfiguration;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersCollector;
-import org.yamcs.sle.Isp1Handler;
-import org.yamcs.sle.CcsdsTime;
 import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.Constants.FrameQuality;
 import org.yamcs.sle.Constants.LockStatus;
@@ -21,8 +19,8 @@ import org.yamcs.sle.user.RafServiceUserHandler;
 import org.yamcs.sle.user.RcfServiceUserHandler;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.AbstractTmFrameLink;
+import org.yamcs.time.Instant;
 import org.yamcs.utils.StringConverter;
-import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
 import org.yamcs.xtce.util.AggregateMemberNames;
 
@@ -34,9 +32,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
-/**
- *
- */
 public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements FrameConsumer {
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
@@ -46,7 +41,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     SleConfig sconf;
     DeliveryMode deliveryMode;
     String service;
-    
+
     // how soon should reconnect in case the connection to the SLE provider is lost
     // if negative, do not reconnect
     int reconnectionIntervalSec;
@@ -106,8 +101,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     }
 
     protected synchronized void connect() {
-        eventProducer.sendInfo("Connecting to SLE "+service+" service "+sconf.host+":"+sconf.port+" as user "+sconf.auth.getMyUsername());
-        if(gvcid==null) {
+        eventProducer.sendInfo("Connecting to SLE " + service + " service " + sconf.host + ":" + sconf.port
+                + " as user " + sconf.auth.getMyUsername());
+        if (gvcid == null) {
             rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
         } else {
             rsuh = new RcfServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
@@ -180,8 +176,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
                 eventProducer.sendWarning("Error processing frame: size " + length + " longer than maximum allowed "
                         + frameHandler.getMaxFrameSize());
             } else {
-                frameCount++;
-                long ertime = TimeEncoding.fromUnixMillisec(ert.toJavaMillisec());
+                frameCount.incrementAndGet();
+                Instant ertime = Instant.get(ert.toJavaMillisec());
 
                 frameHandler.handleFrame(ertime, data, 0, length);
             }

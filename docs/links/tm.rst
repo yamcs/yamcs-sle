@@ -7,7 +7,7 @@ Online RAF service. This link binds and starts a SLE session as soon as it is en
 Usage
 -----
 
-Specify SLE properties in ``sle.yaml``, and add a link entry to ``etc/yamcs.[instance].yaml``:
+Specify SLE properties in ``etc/sle.yaml``, and add a link entry to ``etc/yamcs.[instance].yaml``:
 
 .. code-block:: yaml
 
@@ -21,7 +21,7 @@ Options
 -------
 
 sleProvider (string)
-    **Required.** The name of a provider defined in the ``sle.yaml`` configuration file.
+    **Required.** The name of a provider defined in the ``etc/sle.yaml`` configuration file.
 
 deliveryMode (string)
     **Required.** One of: ``complete`` or ``timely``.
@@ -29,4 +29,5 @@ deliveryMode (string)
 .. include:: _includes/tm-options.rst
 .. include:: _includes/reconnect-options.rst
 
-Other available link options are general frame processing parameters as specified at :yamcs-manual:`links/ccsds-frame-processing`.
+.. note::
+    Other available link options are general frame processing parameters as specified at :yamcs-manual:`links/ccsds-frame-processing`.

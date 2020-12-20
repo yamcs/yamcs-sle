@@ -7,7 +7,6 @@
 	<artifactId>yamcs-sle</artifactId>
 	<version>1.0.1-SNAPSHOT</version>
 
-
 	<name>Yamcs SLE</name>
 	<url>https://yamcs.org</url>
 	<description>
@@ -42,7 +41,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<yamcsVersion>5.0.0</yamcsVersion>
+		<yamcsVersion>5.3.4</yamcsVersion>
 	</properties>
 
 	<dependencies>

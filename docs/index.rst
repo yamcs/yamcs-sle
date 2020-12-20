@@ -19,9 +19,22 @@ The RAF service is further divided into:
 
 * **RAF offline:** used for retrieval of frames stored at the provider.
 
+.. rubric:: Usage with Maven
+
+Add the following dependency to your Yamcs Maven project. Replace ``x.y.z`` with the latest version. See https://mvnrepository.com/artifact/org.yamcs/yamcs-sle
+
+.. code-block:: xml
+
+   <dependency>
+     <groupId>org.yamcs</groupId>
+     <artifactId>yamcs-sle</artifactId>
+     <version>x.y.z</version>
+   </dependency>
+
 
 .. toctree::
     :titlesonly:
+    :caption: Table of Contents
 
     provider-configuration
     links/index
