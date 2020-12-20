@@ -10,7 +10,9 @@
 
 	<name>Yamcs SLE</name>
 	<url>https://yamcs.org</url>
-	<description>Data links for connecting Yamcs to SLE (Space Link Extension) providers such as Ground Stations</description>
+	<description>
+        Data links for connecting Yamcs to SLE (Space Link Extension) providers such as Ground Stations
+	</description>
 
 	<licenses>
 		<license>
@@ -58,24 +60,24 @@
 			<groupId>org.yamcs</groupId>
 			<artifactId>yamcs-web</artifactId>
 			<version>${yamcsVersion}</version>
-			<scope>runtime</scope>
+			<optional>true</optional>
 		</dependency>
 	</dependencies>
 
 	<build>
-	<resources>
-      <resource>
-        <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <directory>${project.build.directory}/generated-resources/protobuf</directory>
-      </resource>
-    </resources>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+			</resource>
+			<resource>
+				<directory>${project.build.directory}/generated-resources/protobuf</directory>
+			</resource>
+		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.8.0</version>
+				<version>3.8.1</version>
 				<configuration>
 					<source>1.8</source>
 					<target>1.8</target>
@@ -96,7 +98,7 @@
 			<plugin>
 				<groupId>org.yamcs</groupId>
 				<artifactId>yamcs-maven-plugin</artifactId>
-				<version>1.2.1</version>
+				<version>1.2.5</version>
 				<executions>
 					<execution>
 						<goals>
@@ -130,7 +132,7 @@
 					</execution>
 				</executions>
 				<configuration>
-				    <protocArtifact>com.google.protobuf:protoc:3.7.1:exe:${os.detected.classifier}</protocArtifact>
+					<protocArtifact>com.google.protobuf:protoc:3.7.1:exe:${os.detected.classifier}</protocArtifact>
 					<writeDescriptorSet>true</writeDescriptorSet>
 					<checkStaleness>true</checkStaleness>
 					<descriptorSetFileName>${project.artifactId}.protobin</descriptorSetFileName>
@@ -142,7 +144,7 @@
 							<id>yamcs</id>
 							<groupId>org.yamcs</groupId>
 							<artifactId>yamcs-protoc-plugin</artifactId>
-							<version>5.1.0</version>
+							<version>5.2.3</version>
 							<mainClass>org.yamcs.protoc.ServiceGenerator</mainClass>
 						</protocPlugin>
 					</protocPlugins>
@@ -164,22 +166,41 @@
 
 	<profiles>
 		<profile>
+			<id>java8-compatibility</id>
+			<activation>
+				<jdk>[9,)</jdk>
+			</activation>
+			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-compiler-plugin</artifactId>
+							<configuration>
+								<release>8</release>
+							</configuration>
+						</plugin>
+					</plugins>
+				</pluginManagement>
+			</build>
+		</profile>
+		<profile>
 			<id>yamcs-release</id>
 			<build>
 				<plugins>
-                                         <plugin>
-                                                <groupId>org.apache.maven.plugins</groupId>
-                                                <artifactId>maven-source-plugin</artifactId>
-                                                <version>2.2.1</version>
-                                                <executions>
-                                                        <execution>
-                                                                <id>attach-sources</id>
-                                                                <goals>
-                                                                        <goal>jar-no-fork</goal>
-                                                                </goals>
-                                                        </execution>
-                                                </executions>
-                                        </plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-source-plugin</artifactId>
+						<version>2.2.1</version>
+						<executions>
+							<execution>
+								<id>attach-sources</id>
+								<goals>
+									<goal>jar-no-fork</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
 
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
