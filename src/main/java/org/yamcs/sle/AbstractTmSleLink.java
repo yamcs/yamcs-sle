@@ -21,6 +21,7 @@ import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.AbstractTmFrameLink;
 import org.yamcs.time.Instant;
 import org.yamcs.utils.StringConverter;
+import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
 import org.yamcs.xtce.util.AggregateMemberNames;
 
@@ -177,7 +178,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
                         + frameHandler.getMaxFrameSize());
             } else {
                 frameCount.incrementAndGet();
-                Instant ertime = Instant.get(ert.toJavaMillisec());
+                Instant ertime = toInstant(ert);
 
                 frameHandler.handleFrame(ertime, data, 0, length);
             }
@@ -279,5 +280,14 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
             rafStatus = SystemParametersCollector.getPV(sp_rafStatus_id, getCurrentTime(), tmp);
         }
+    }
+
+    static Instant toInstant(CcsdsTime ccsdsTime) {
+        long picosInDay = ccsdsTime.getPicosecInDay();
+
+        long millis = (ccsdsTime.getNumDays() - CcsdsTime.NUM_DAYS_1958_1970) * CcsdsTime.MS_IN_DAY
+                + picosInDay / 1_000_000_000l;
+        int picos = (int) (picosInDay % 1_000_000_000);
+        return TimeEncoding.fromUnixPicos(millis, picos);
     }
 }
