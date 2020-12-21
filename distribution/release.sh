@@ -32,7 +32,7 @@ fi
 if [[ -n $(git status -s) ]]; then
     git commit . -v -em"Prepare release yamcs-sle-${version}" || :
     if [ $snapshot -eq 0 ]; then
-        echo git tag yamcs-sle-$version
+        git tag yamcs-sle-$version
     fi
 fi
 
