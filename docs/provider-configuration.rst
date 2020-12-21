@@ -42,11 +42,14 @@ An example of provider configuration is here below:
 
 The section ``Providers`` contains a map with each SLE provider (e.g. ground station). This contains a section with general settings followed by a specific cltu, raf-ontl, raf-onlc, rcf-ontl, rcf-onlc sections containing connection parameters for the CLTU service, RAF/RCF online timely, respectively RAF/RCF online complete services.
 
-In the example above the ``CommonSettings`` block is included into the SMILE3 provider block using the yaml node achor and reference feature. This feature (pure yaml functionality, not specific to SLE) allows grouping common settings for multiple ground stations into one definition.
+In the example above the ``CommonSettings`` block is included into the GS1 provider block using the yaml node achor and reference feature. This feature (pure yaml functionality, not specific to SLE) allows grouping common settings for multiple ground stations into one definition.
 
 
-Provider Options
-----------------
+Common Options
+--------------
+
+These options are specified at the provider level (directly under ``GS1`` in the example above) as they apply to all services from this provider.
+
 
 hashAlgorithm  (string)
     | One of ``SHA-1`` or ``SHA-256``.
@@ -62,45 +65,48 @@ versionNumber (integer)
     2, 3 or 4. This is the version number passed in the BIND call. Note that there is no code to handle specifically any version but the SLE versions 2-4 SLE are belived to be compatible as far as the user (i.e. Yamcs) is concerned; the differences are mostly to do with new options being added in the newer versions. Those options are currently not accessible from the Yamcs SLE link.
 
 myUsername (string)
-    the username  used to build the credentials token part of ISP1 authentication if the authLevel is ALL or BIND.
+    The username  used to build the credentials token part of ISP1 authentication if the authLevel is ALL or BIND.
     
 myPassword (hexadecimal string)
-     used together with the myUsername for the ISP1 authentication.
+    Used together with the myUsername for the ISP1 authentication.
 
 peerUsername (string)
-    the username of the peer. It is used to verify the peer credential tokens. Depending on the ``authLevel``, all messages, the bind return or no message will be authenticated.
+    The username of the peer. It is used to verify the peer credential tokens. Depending on the ``authLevel``, all messages, the bind return or no message will be authenticated.
 
 peerPassword (hexadecimal string)
-    used together with the username for verifying the peer suplied credential token.
+    Used together with the ``peerUsername`` for verifying the peer suplied credential token.
 
 initiatorId (string)
-    this property species the value of the ``initiator-identifier`` parameter passed as part of the BIND SLE message. 
+    This property species the value of the ``initiator-identifier`` parameter passed as part of the BIND SLE message. 
 
 responderPortId (string)
-    this property species the value of the ``responder-port-identifier`` parameter passed as part of the BIND SLE message.
+    This property species the value of the ``responder-port-identifier`` parameter passed as part of the BIND SLE message.
  
 heartbeatInterval (integer number of seconds)
-    this property specifies the value proposed to the peer for the ISP1 heartbeat interval. The SLE provide will check this against its accepted range and it will close the connection if the value sent by Yamcs is not within the accepted range.
+    This property specifies the value proposed to the peer for the ISP1 heartbeat interval. The SLE provider will check this against its accepted range and it will close the connection if the value sent by Yamcs is not within the accepted range.
     
 heartbeatDeadFactor (integer)
-    defines the number of heartbeat intervals without a message from peer after which a TCP connection is considered dead and is closed.
+    Defines the number of heartbeat intervals without a message from peer after which a TCP connection is considered dead and is closed.
 
 
 Service-specific Options
 ------------------------
 
+These options are specified as part of each SLE service (e.g. under ``cltu`` in the example above).
+
+
 host (string)
-    the hostname or IP address to connect to.
+    The hostname or IP address to connect to.
 
 port (integer)
-    the port number to connect to.
+    The port number to connect to.
         
 serviceInstance (string)
-    used (after transformation to binary form) as ``service-instance-identifier`` parameter in the SLE BIND call to identify the service requested to the provider. It is a series of ``sia=value`` separated by dots where sia is a service identifier attribute.
+    Used (after transformation to binary form) as ``service-instance-identifier`` in the SLE BIND call to identify the service requested to the provider. It is a series of ``sia=value`` separated by dots where sia is a service identifier attribute.
     
     Ask your SLE provider for the value of this parameter. 
 
 tmlMaxLength (integer)
-    the maximum length in bytes of the Transport Mapping Layer (TML) messages. These are the messages defined in the ISP1 standard for transporting SLE data. If a message larger than this length is received, the connection is closed.
+    The maximum length in bytes of the Transport Mapping Layer (TML) messages. These are the messages defined in the ISP1 standard for transporting SLE data. If a message larger than this length is received, the connection is closed.
     
-    On the ESA SLE provider this is configured by the transfer-buffer-size parameter which sets the number of frames which can be transferred in one message. The tmlMaxLength should be set to accomodate that number of frames taking into account the frame size and some 70 bytes overhead per frame.
+    On the ESA SLE provider this is configured by the ``transfer-buffer-size`` parameter which sets the number of frames which can be transferred in one message. The tmlMaxLength should be set to accomodate that number of frames taking into account the frame size and some 70 bytes overhead per frame.

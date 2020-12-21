@@ -14,7 +14,8 @@ Specify SLE properties in ``etc/sle.yaml``, and add a link entry to ``etc/yamcs.
     dataLinks:
         - name: SLE_OFFLINE_IN
           class: org.yamcs.sle.OfflineTmSleLink
-          # options
+          sleProvider: GS1
+          # other options
 
 
 Options

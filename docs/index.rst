@@ -6,7 +6,7 @@ This plugin extends Yamcs with links to connect via the CCSDS SLE (Space Link Ex
 The supported services are:
 
 * CCSDS Return All Frames (RAF) specified in `CCSDS 911.1-B-4 <https://public.ccsds.org/Pubs/911x1b4.pdf>`_.
-* CCSDS Return Chanel Frames (RCF) specified in `CCSDS 911.1-B-4 <https://public.ccsds.org/Pubs/911x2b3.pdf>`_.
+* CCSDS Return Chanel Frames (RCF) specified in `911.2-B-3 <https://public.ccsds.org/Pubs/911x2b3.pdf>`_.
 * CCSDS Forward CLTU (FCLTU) specified in `CCSDS 912.1-B-4 <https://public.ccsds.org/Pubs/912x1b4.pdf>`_.
 
 The services are supported by the SLE Internet Protocol for transfer services (ISP1) specified in `CCSDS 913.1-B-2 <https://public.ccsds.org/Pubs/913x1b2.pdf>`_.
@@ -14,11 +14,11 @@ The services are supported by the SLE Internet Protocol for transfer services (I
 
 The RAF and RCF services are further divided into:
 
-* **online timely:** used for retrieval of frames where there is a guaranteed timeliness of data - if the receiver of the data cannot process the data fast enough (or the network link towards the receiver is too slow), the provider will drop data.
+* **online timely:** used for retrieval of frames with a guaranteed timeliness of data - if the receiver of the data cannot process the data fast enough (or the network link towards the receiver is too slow), the provider will drop data.
 
-* **online complete:** used for retrieval of frames where the receiver wants to receive complete data at the expense of timeliness. The provider will buffer the data if the receiver is too slow.
+* **online complete:** used for retrieval of frames when the receiver wants to receive complete data at the expense of timeliness. The provider will buffer the data if the receiver is too slow.
 
-* **offline:** used for retrieval of frames stored at the provider.
+* **offline:** used for retrieval of frames stored at the provider (ground station).
 
 .. rubric:: Usage with Maven
 

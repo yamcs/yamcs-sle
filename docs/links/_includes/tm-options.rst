@@ -1,6 +1,14 @@
 service (string)
-    Select between ``RAF`` and ``RCF`` SLE services. If the RCF service is used, the request sent with the SLE START includes the triplet (TransferFrameVersionNumber, SpacecraftId, VirtualChannelId). The values for the TransferFrameVersionNumber and SpacecraftId parameters are normally derived from the frame processing configuration but can be overriden by the options below. Overriding them will most likely result in an invalid configuration. The value of the VirtualChannelId is by default -1 meaning all VCs are requested but can be restricted to only one VC with the option below.
+    One of: ``RAF`` or ``RCF``.
     
+    Depending on this setting and the ``deliveryMode``, one of the entries raf-ontl, raf-onlc, rcf-ontl, rcf-onlc from sle.yaml will be used.
+      
+    If the RCF service is used, the request sent with the SLE START includes the triplet (TransferFrameVersionNumber, SpacecraftId, VirtualChannelId).
+    
+    The values for the TransferFrameVersionNumber and SpacecraftId parameters are normally derived from the frame processing configuration but can be overriden by the options below. Overriding them will most likely result in an invalid configuration.
+    
+    The value of the VirtualChannelId is by default -1 meaning all VCs are requested but can be restricted to only one VC with the option below.
+      
     Default: ``RAF``
 
 rcfTfVersion (integer)
