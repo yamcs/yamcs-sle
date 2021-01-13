@@ -3,7 +3,7 @@
 This project contains Yamcs Data Links for enabling yamcs to receive data from an SLE provider.
 For the moment only FCLTU (Forward CLTU), RAF (Return All Frames) and RCF (Return Channel Frame) are supported.
 
-The plugin is a straightforward implementation of Yamcs data links based on the [SLE to UDP bridge](https://github.com/yamcs/jsle) package. The jsle package also contains a SLE to UDP bridge allowing to test the plugin together with a simulator which sends/receives frames via UDP.
+The plugin is a straightforward implementation of Yamcs data links based on the [jsle](https://github.com/yamcs/jsle) package. The jsle package also contains a SLE to UDP bridge allowing to test the plugin together with a simulator which sends/receives frames via UDP.
 
 ## Documentation
 
