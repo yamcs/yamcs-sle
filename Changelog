@@ -1,3 +1,6 @@
+Version 1.2 released 29-Jan-2020
+- fixed conversion of earth reception time 
+
 Version 1.1 released 21-Dec-2020
 - updated to work with version 5.3.5+ of Yamcs 
 

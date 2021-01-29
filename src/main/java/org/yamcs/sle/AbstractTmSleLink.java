@@ -285,7 +285,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     static Instant toInstant(CcsdsTime ccsdsTime) {
         long picosInDay = ccsdsTime.getPicosecInDay();
 
-        long millis = (ccsdsTime.getNumDays() - CcsdsTime.NUM_DAYS_1958_1970) * CcsdsTime.MS_IN_DAY
+        long millis = (ccsdsTime.getNumDays() - CcsdsTime.NUM_DAYS_1958_1970) * (long) CcsdsTime.MS_IN_DAY
                 + picosInDay / 1_000_000_000l;
         int picos = (int) (picosInDay % 1_000_000_000);
         return TimeEncoding.fromUnixPicos(millis, picos);
