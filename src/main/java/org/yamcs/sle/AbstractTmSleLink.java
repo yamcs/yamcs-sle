@@ -196,7 +196,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     @Override
     public void onProductionStatusChange(ProductionStatus productionStatusChange) {
-        eventProducer.sendInfo("SLE production satus changed to " + productionStatusChange);
+        eventProducer.sendInfo("SLE production status changed to " + productionStatusChange);
 
     }
 
