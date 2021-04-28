@@ -5,7 +5,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
-import org.yamcs.sle.CcsdsTime;
 import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.user.RafServiceUserHandler;
 import org.yamcs.sle.user.RcfServiceUserHandler;
@@ -63,7 +62,6 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
 
     LinkedBlockingQueue<RequestRange> requestQueue = new LinkedBlockingQueue<>();
 
-    
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
         super.init(instance, name, config, DeliveryMode.rtnOffline);
         reconnectionIntervalSec = -1;
@@ -90,17 +88,17 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
             rsuh.shutdown();
             rsuh = null;
         } else {
-            eventProducer.sendInfo("Starting an offline request for interval "+rr);
+            eventProducer.sendInfo("Starting an offline request for interval " + rr);
             CompletableFuture<Void> cf;
-            if(gvcid==null) {
-               cf = ((RafServiceUserHandler)rsuh).start(rr.start, rr.stop);  
+            if (gvcid == null) {
+                cf = ((RafServiceUserHandler) rsuh).start(rr.start, rr.stop);
             } else {
-                cf = ((RcfServiceUserHandler)rsuh).start(rr.start, rr.stop, gvcid);
+                cf = ((RcfServiceUserHandler) rsuh).start(rr.start, rr.stop, gvcid);
             }
             cf.handle((v, t) -> {
                 if (t != null) {
-                    eventProducer.sendWarning("Request for interval "+rr+" failed: "+t );
-                    //we can do nothing about it, try maybe there is a new request
+                    eventProducer.sendWarning("Request for interval " + rr + " failed: " + t);
+                    // we can do nothing about it, try maybe there is a new request
                     sleStart();
                     return null;
                 }
@@ -147,15 +145,15 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     static class RequestRange {
         CcsdsTime start;
         CcsdsTime stop;
-        
+
         public RequestRange(CcsdsTime start, CcsdsTime stop) {
             this.start = start;
             this.stop = stop;
         }
-        
+
         @Override
         public String toString() {
-            return "["+start + ", "+ stop + "]";
+            return "[" + start + ", " + stop + "]";
         }
     }
 }

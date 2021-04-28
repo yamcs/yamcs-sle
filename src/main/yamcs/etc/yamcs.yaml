@@ -17,3 +17,6 @@ incomingDir: /storage/yamcs-incoming
 #serverId: yamcs1
 
 secretKey: changeme_U9opEPbCy3YGk
+
+yamcs-web:
+ tag: "Space Link Extension Example"

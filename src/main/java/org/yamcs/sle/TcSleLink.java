@@ -11,7 +11,8 @@ import org.yamcs.cmdhistory.CommandHistoryPublisher.AckStatus;
 import org.yamcs.commanding.PreparedCommand;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
-import org.yamcs.parameter.SystemParametersCollector;
+import org.yamcs.parameter.SystemParametersService;
+import org.yamcs.protobuf.Yamcs.Value.Type;
 import org.yamcs.sle.Constants.CltuProductionStatus;
 import org.yamcs.sle.Constants.UplinkStatus;
 import org.yamcs.sle.user.CltuServiceUserHandler;
@@ -23,6 +24,9 @@ import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorDetection;
 import org.yamcs.utils.StringConverter;
 import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
+import org.yamcs.xtce.AggregateParameterType;
+import org.yamcs.xtce.Member;
+import org.yamcs.xtce.SystemParameter;
 import org.yamcs.xtce.util.AggregateMemberNames;
 
 import ccsds.sle.transfer.service.cltu.outgoing.pdus.CltuAsyncNotifyInvocation;
@@ -48,7 +52,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     FrameErrorDetection errorCorrection;
 
     SleConfig sconf;
-    
+
     CltuServiceUserHandler csuh;
     CltuSleMonitor sleMonitor;
     Map<Integer, TcTransferFrame> pendingFrames = new ConcurrentHashMap<>();
@@ -75,7 +79,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
 
     org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
 
-    private String sv_sleState_id, sp_cltuStatus_id, sp_numPendingFrames_id;
+    private SystemParameter sp_sleState, sp_cltuStatus, sp_numPendingFrames;
     final static AggregateMemberNames cltuStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
             "uplinkStatus", "numCltuReceived", "numCltuProcessed", "numCltuRadiated", "cltuBufferAvailable" });
 
@@ -84,7 +88,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
 
     public void init(String yamcsInstance, String name, YConfiguration config) {
         super.init(yamcsInstance, name, config);
-       
+
         maxPendingFrames = config.getInt("maxPendingFrames", 20);
         waitForUplinkMsec = config.getInt("waitForUplinkMsec", 5000);
         reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
@@ -93,12 +97,11 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
                 .getConfig(config.getString("sleProvider"));
         sconf = new SleConfig(slec, "cltu");
 
-
         sleMonitor = new MyMonitor();
     }
 
     private synchronized void connect() {
-        eventProducer.sendInfo("Connecting to SLE FCLTU service "+sconf.host+":"+sconf.port+" as user "+
+        eventProducer.sendInfo("Connecting to SLE FCLTU service " + sconf.host + ":" + sconf.port + " as user " +
                 sconf.auth.getMyUsername());
         csuh = new CltuServiceUserHandler(sconf.auth, sconf.attr);
         csuh.setVersionNumber(sconf.versionNumber);
@@ -140,13 +143,12 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
             }
             TcTransferFrame tf = multiplexer.getFrame();
             if (tf != null) {
-                
 
                 byte[] data = tf.getData();
-                if(log.isTraceEnabled()) {
+                if (log.isTraceEnabled()) {
                     log.trace("New TC frame: {}\n\tdata: {}", tf, StringConverter.arrayToHexString(data));
                 }
-                
+
                 if (cltuGenerator != null) {
                     data = cltuGenerator.makeCltu(data);
                 }
@@ -162,7 +164,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
                     }
                     continue;
                 }
-                if(log.isTraceEnabled()) {
+                if (log.isTraceEnabled()) {
                     log.trace("Sending CLTU of size {}: {}", data.length, StringConverter.arrayToHexString(data));
                 }
                 int id = csuh.transferCltu(data);
@@ -245,24 +247,43 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
         }
 
         for (PreparedCommand pc : tf.getCommands()) {
-            commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, yamcsTime, AckStatus.OK, time.toStringPico());
+            commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, yamcsTime, AckStatus.OK,
+                    time.toStringPico());
         }
 
         uplinkReadySemaphore.release();
     }
 
     @Override
-    public void setupSystemParameters(SystemParametersCollector sysParamCollector) {
-        super.setupSystemParameters(sysParamCollector);
-        sv_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
-        sp_numPendingFrames_id = sysParamCollector.getNamespace() + "/" + linkName + "/numPendingFrames";
-        sp_cltuStatus_id = sysParamCollector.getNamespace() + "/" + linkName + "/cltuStatus";
+    public void setupSystemParameters(SystemParametersService sps) {
+        super.setupSystemParameters(sps);
+
+        sp_sleState = sps.createEnumeratedSystemParameter(linkName + "/sleState", org.yamcs.sle.State.class,
+                "The state of the SLE connection");
+
+        sp_numPendingFrames = sps.createSystemParameter(linkName + "/numPendingFrames", Type.SINT32,
+                "the number of pending (waiting to be radiated) frames");
+
+        AggregateParameterType spStatusType = new AggregateParameterType.Builder()
+                .setName("cltuStatus_type")
+                .addMember(new Member("productionStatus",
+                        sps.createEnumeratedParameterType(CltuProductionStatus.class)))
+                .addMember(new Member("uplinkStatus",
+                        sps.createEnumeratedParameterType(UplinkStatus.class)))
+                .addMember(new Member("numCltuReceived", sps.getBasicType(Type.SINT32)))
+                .addMember(new Member("numCltuProcessed", sps.getBasicType(Type.SINT32)))
+                .addMember(new Member("numCltuRadiated", sps.getBasicType(Type.SINT32)))
+                .addMember(new Member("cltuBufferAvailable", sps.getBasicType(Type.UINT64)))
+                .build();
+
+        sp_cltuStatus = sps.createSystemParameter(linkName + "/cltuStatus", spStatusType,
+                "Status of the CLTU uplink as received from the Ground Station");
     }
 
     @Override
     protected void collectSystemParameters(long time, List<ParameterValue> list) {
-        list.add(SystemParametersCollector.getPV(sv_sleState_id, time, sleState.name()));
-        list.add(SystemParametersCollector.getPV(sp_numPendingFrames_id, time, pendingFrames.size()));
+        list.add(SystemParametersService.getPV(sp_sleState, time, sleState));
+        list.add(SystemParametersService.getPV(sp_numPendingFrames, time, pendingFrames.size()));
         if (cltuStatus != null) {
             list.add(cltuStatus);
             cltuStatus = null;
@@ -288,7 +309,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
 
     @Override
     protected void doStart() {
-        if(!isDisabled()) {
+        if (!isDisabled()) {
             doEnable();
         }
         notifyStarted();
@@ -356,7 +377,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
             tmp.setMemberValue("cltuBufferAvailable",
                     ValueUtility.getUint64Value(cltuStatusReport.getCltuBufferAvailable().longValue()));
 
-            cltuStatus = SystemParametersCollector.getPV(sp_cltuStatus_id, getCurrentTime(), tmp);
+            cltuStatus = SystemParametersService.getPV(sp_cltuStatus, getCurrentTime(), tmp);
         }
 
         @Override

@@ -5,7 +5,7 @@
 
 	<groupId>org.yamcs</groupId>
 	<artifactId>yamcs-sle</artifactId>
-	<version>1.2.1</version>
+	<version>1.2.2</version>
 
 	<name>Yamcs SLE</name>
 	<url>https://yamcs.org</url>
@@ -41,14 +41,14 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<yamcsVersion>5.4.0</yamcsVersion>
+		<yamcsVersion>5.5.0-SNAPSHOT</yamcsVersion>
 	</properties>
 
 	<dependencies>
 		<dependency>
 			<groupId>org.yamcs</groupId>
 			<artifactId>jsle</artifactId>
-			<version>0.11</version>
+			<version>0.12</version>
 		</dependency>
 		<dependency>
 			<groupId>org.yamcs</groupId>

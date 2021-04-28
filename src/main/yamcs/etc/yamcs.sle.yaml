@@ -1,4 +1,5 @@
 services:
+  - class: org.yamcs.parameter.SystemParametersService
   - class: org.yamcs.archive.XtceTmRecorder
   - class: org.yamcs.archive.ParameterRecorder
   - class: org.yamcs.archive.AlarmRecorder
@@ -115,6 +116,6 @@ streamConfig:
     - name: "tm_dump"
   cmdHist: ["cmdhist_realtime", "cmdhist_dump"]
   event: ["events_realtime", "events_dump"]
-  param: ["pp_realtime", "pp_tse", "sys_param"]
+  param: ["pp_realtime", "sys_param"]
   parameterAlarm: ["alarms_realtime"]
   tc: ["tc_realtime"]

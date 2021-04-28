@@ -58,11 +58,13 @@ import org.yamcs.sle.user.RcfServiceUserHandler;
  * <tr>
  * <tr>
  * <td>rcfSpacecraftId</td>
- * <td>Specifies the number sent as part of the RCF request to the SLE provider. If not specified the spacecraftId will be used.</td>
+ * <td>Specifies the number sent as part of the RCF request to the SLE provider. If not specified the spacecraftId will
+ * be used.</td>
  * </tr>
  * <tr>
  * <td>rcfVcId</td>
- * <td>Specifies the virtual channel sent as part of the RCF request. If not specified, or if negative, the request will be sent for all VCs</td>
+ * <td>Specifies the virtual channel sent as part of the RCF request. If not specified, or if negative, the request will
+ * be sent for all VCs</td>
  * </tr>
  * <tr>
  * <tr>
@@ -87,12 +89,13 @@ public class TmSleLink extends AbstractTmSleLink {
 
     private DeliveryMode getDeliveryMode(YConfiguration config) {
         String dm = config.getString("deliveryMode");
-        if("timely".equalsIgnoreCase(dm)) {
+        if ("timely".equalsIgnoreCase(dm)) {
             return DeliveryMode.rtnTimelyOnline;
         } else if ("complete".equalsIgnoreCase(dm)) {
             return DeliveryMode.rtnCompleteOnline;
         } else {
-            throw new ConfigurationException("Invalid value '"+dm+"' for deliverMode. Please use 'timely' or 'complete'");
+            throw new ConfigurationException(
+                    "Invalid value '" + dm + "' for deliverMode. Please use 'timely' or 'complete'");
         }
     }
 
@@ -115,16 +118,18 @@ public class TmSleLink extends AbstractTmSleLink {
 
     protected void sleStart() {
         CompletableFuture<Void> cf;
-        if(gvcid==null) {
-           cf = ((RafServiceUserHandler)rsuh).start();  
+        if (gvcid == null) {
+            cf = ((RafServiceUserHandler) rsuh).start();
         } else {
-            cf = ((RcfServiceUserHandler)rsuh).start(gvcid);
+            cf = ((RcfServiceUserHandler) rsuh).start(gvcid);
         }
         cf.handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to start: " + t.getMessage());
                 return null;
             }
+            log.debug("Successfully started the service");
+            rsuh.schedulePeriodicStatusReport(10);
             return null;
         });
     }

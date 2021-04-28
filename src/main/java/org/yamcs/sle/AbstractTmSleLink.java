@@ -7,7 +7,8 @@ import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
-import org.yamcs.parameter.SystemParametersCollector;
+import org.yamcs.parameter.SystemParametersService;
+import org.yamcs.protobuf.Yamcs.Value.Type;
 import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.Constants.FrameQuality;
 import org.yamcs.sle.Constants.LockStatus;
@@ -23,6 +24,10 @@ import org.yamcs.time.Instant;
 import org.yamcs.utils.StringConverter;
 import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
+import org.yamcs.xtce.AggregateParameterType;
+import org.yamcs.xtce.EnumeratedParameterType;
+import org.yamcs.xtce.Member;
+import org.yamcs.xtce.SystemParameter;
 import org.yamcs.xtce.util.AggregateMemberNames;
 
 import io.netty.bootstrap.Bootstrap;
@@ -50,7 +55,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     private org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
     private volatile ParameterValue rafStatus;
 
-    private String sp_sleState_id, sp_rafStatus_id;
+    private SystemParameter sp_sleState, sp_racfStatus;
     final static AggregateMemberNames rafStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
             "carrierLockStatus", "subcarrierLockStatus", "symbolSyncLockStatus", "deliveredFrameNumber",
             "errorFreeFrameNumber" });
@@ -112,6 +117,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         rsuh.setVersionNumber(sconf.versionNumber);
         rsuh.setAuthLevel(sconf.authLevel);
         rsuh.addMonitor(sleMonitor);
+
         NioEventLoopGroup workerGroup = getEventLoop();
         Bootstrap b = new Bootstrap();
         b.group(workerGroup);
@@ -202,24 +208,37 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     @Override
     public void onLossFrameSync(CcsdsTime time, LockStatus carrier, LockStatus subcarrier, LockStatus symbolSync) {
-        // TODO make some parameters out of this
         eventProducer.sendInfo("SLE loss frame sync time: " + time + " carrier: " + carrier + " subcarrier: "
                 + subcarrier + " symbolSync: " + symbolSync);
     }
 
     @Override
-    public void setupSystemParameters(SystemParametersCollector sysParamCollector) {
-        super.setupSystemParameters(sysParamCollector);
-        if (sysParamCollector != null) {
-            sp_sleState_id = sysParamCollector.getNamespace() + "/" + linkName + "/sleState";
-            sp_rafStatus_id = sysParamCollector.getNamespace() + "/" + linkName + "/rafStatus";
-        }
+    public void setupSystemParameters(SystemParametersService sps) {
+        super.setupSystemParameters(sps);
+        sp_sleState = sps.createEnumeratedSystemParameter(linkName + "/sleState", org.yamcs.sle.State.class,
+                "The state of the SLE connection");
+
+        EnumeratedParameterType lockStatusType = sps.createEnumeratedParameterType(LockStatus.class);
+        AggregateParameterType spStatusType = new AggregateParameterType.Builder()
+                .setName("racfStatus_type")
+                .addMember(new Member("productionStatus",
+                        sps.createEnumeratedParameterType(ProductionStatus.class)))
+                .addMember(new Member("carrierLockStatus", lockStatusType))
+                .addMember(new Member("subcarrierLockStatus", lockStatusType))
+                .addMember(new Member("symbolSyncLockStatus", lockStatusType))
+                .addMember(new Member("deliveredFrameNumber", sps.getBasicType(Type.SINT32)))
+                .addMember(new Member("errorFreeFrameNumber", sps.getBasicType(Type.SINT32)))
+                .build();
+
+        String pname = linkName + (gvcid == null ? "/rafStatus" : "/rcfStatus");
+        sp_racfStatus = sps.createSystemParameter(pname, spStatusType,
+                ((gvcid == null) ? "RAF" : "RCF") + " service status received from the Ground Station");
     }
 
     @Override
     protected void collectSystemParameters(long time, List<ParameterValue> list) {
         super.collectSystemParameters(time, list);
-        list.add(SystemParametersCollector.getPV(sp_sleState_id, time, sleState.name()));
+        list.add(SystemParametersService.getPV(sp_sleState, time, sleState.name()));
         if (rafStatus != null) {
             list.add(rafStatus);
             rafStatus = null;
@@ -268,17 +287,21 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
             AggregateValue tmp = new AggregateValue(rafStatusMembers);
 
-            tmp.setMemberValue("productionStatus", ValueUtility.getStringValue(prodStatus.name()));
-            tmp.setMemberValue("carrierLockStatus", ValueUtility.getStringValue(carrierLockStatus.name()));
-            tmp.setMemberValue("subcarrierLockStatus", ValueUtility.getStringValue(subcarrierLockStatus.name()));
-            tmp.setMemberValue("symbolSyncLockStatus", ValueUtility.getStringValue(symbolSyncLockStatus.name()));
+            tmp.setMemberValue("productionStatus",
+                    ValueUtility.getEnumeratedValue(prodStatus.ordinal(), prodStatus.name()));
+            tmp.setMemberValue("carrierLockStatus", ValueUtility.getEnumeratedValue(
+                    carrierLockStatus.ordinal(), carrierLockStatus.name()));
+            tmp.setMemberValue("subcarrierLockStatus",
+                    ValueUtility.getEnumeratedValue(subcarrierLockStatus.ordinal(), subcarrierLockStatus.name()));
+            tmp.setMemberValue("symbolSyncLockStatus",
+                    ValueUtility.getEnumeratedValue(symbolSyncLockStatus.ordinal(), symbolSyncLockStatus.name()));
 
             tmp.setMemberValue("deliveredFrameNumber",
                     ValueUtility.getSint32Value(rafStatusReport.getDeliveredFrameNumber()));
             tmp.setMemberValue("errorFreeFrameNumber",
                     ValueUtility.getSint32Value(rafStatusReport.getErrorFreeFrameNumber()));
 
-            rafStatus = SystemParametersCollector.getPV(sp_rafStatus_id, getCurrentTime(), tmp);
+            rafStatus = SystemParametersService.getPV(sp_racfStatus, getCurrentTime(), tmp);
         }
     }
 
