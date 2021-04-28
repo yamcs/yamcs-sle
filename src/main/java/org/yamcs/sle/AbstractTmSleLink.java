@@ -107,6 +107,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     }
 
     protected synchronized void connect() {
+        if (!isRunningAndEnabled()) {
+            return;
+        }
         eventProducer.sendInfo("Connecting to SLE " + service + " service " + sconf.host + ":" + sconf.port
                 + " as user " + sconf.auth.getMyUsername());
         if (gvcid == null) {
@@ -263,6 +266,10 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             if (rsuh != null) {
                 rsuh.shutdown();
                 rsuh = null;
+            }
+
+            if (isRunningAndEnabled() && reconnectionIntervalSec >= 0) {
+                getEventLoop().schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
             }
         }
 

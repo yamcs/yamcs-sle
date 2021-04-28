@@ -140,11 +140,13 @@ public class TmSleLink extends AbstractTmSleLink {
             rsuh.shutdown();
             rsuh = null;
         }
+        eventProducer.sendInfo("SLE link disabled");
     }
 
     @Override
     protected void doEnable() throws Exception {
         connect();
+        eventProducer.sendInfo("SLE link enabled");
     }
 
     @Override

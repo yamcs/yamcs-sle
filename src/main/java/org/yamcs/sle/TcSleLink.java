@@ -101,6 +101,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     }
 
     private synchronized void connect() {
+        if (!isRunningAndEnabled()) {
+            return;
+        }
         eventProducer.sendInfo("Connecting to SLE FCLTU service " + sconf.host + ":" + sconf.port + " as user " +
                 sconf.auth.getMyUsername());
         csuh = new CltuServiceUserHandler(sconf.auth, sconf.attr);
@@ -125,7 +128,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 csuh = null;
-                if (!isDisabled() && reconnectionIntervalSec >= 0) {
+                if (reconnectionIntervalSec >= 0) {
                     workerGroup.schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
                 }
             } else {
@@ -137,10 +140,6 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     @Override
     public void run() {
         while (isRunningAndEnabled()) {
-            if (csuh == null) {
-                connect();
-                continue;
-            }
             TcTransferFrame tf = multiplexer.getFrame();
             if (tf != null) {
 
@@ -299,12 +298,15 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
             csuh.shutdown();
             csuh = null;
         }
+        eventProducer.sendInfo("SLE link disabled");
     }
 
     @Override
     protected void doEnable() {
+        connect();
         thread = new Thread(this);
         thread.start();
+        eventProducer.sendInfo("SLE link enabled");
     }
 
     @Override
@@ -345,6 +347,10 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
                 if (tf.isBypass()) {
                     failBypassFrame(tf, "SLE disconnected");
                 }
+            }
+
+            if (isRunningAndEnabled() && reconnectionIntervalSec >= 0) {
+                getEventLoop().schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
             }
         }
 
