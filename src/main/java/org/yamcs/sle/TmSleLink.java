@@ -1,14 +1,14 @@
 package org.yamcs.sle;
 
 import java.util.concurrent.CompletableFuture;
-
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
-import org.yamcs.tctm.ccsds.UdpTmFrameLink;
-
 import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.user.RafServiceUserHandler;
 import org.yamcs.sle.user.RcfServiceUserHandler;
+import org.yamcs.tctm.ccsds.UdpTmFrameLink;
 
 /**
  * Receives TM frames via SLE. The Virtual Channel configuration is identical with the configuration of
@@ -72,16 +72,22 @@ import org.yamcs.sle.user.RcfServiceUserHandler;
  * <td>one of timely, or complete</td>
  * </tr>
  * <tr>
- * 
+ *
  * </table>
- * 
- * 
+ *
+ *
  * @author nm
  *
  */
 public class TmSleLink extends AbstractTmSleLink {
     RacfSleMonitor sleMonitor = new MyMonitor();
+    /**
+     * A semaphore to use for waiting for the link to cleanly move to the
+     * unbound state when disabling the data link.
+     */
+    Semaphore shutdownSemaphore;
 
+    @Override
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
         super.init(instance, name, config, getDeliveryMode(config));
         reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
@@ -116,6 +122,7 @@ public class TmSleLink extends AbstractTmSleLink {
         notifyStopped();
     }
 
+    @Override
     protected void sleStart() {
         CompletableFuture<Void> cf;
         if (gvcid == null) {
@@ -137,8 +144,20 @@ public class TmSleLink extends AbstractTmSleLink {
     @Override
     protected void doDisable() {
         if (rsuh != null) {
+            shutdownSemaphore = new Semaphore(0);
+            if (rsuh.isConnected()) {
+                sleStop();
+                try {
+                    shutdownSemaphore.tryAcquire(maxShutdownDelayMillis,
+                            TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    eventProducer.sendWarning(
+                            "SLE link did not shut down cleanly within timeout");
+                }
+            }
             rsuh.shutdown();
             rsuh = null;
+            removeSemaphore();
         }
         eventProducer.sendInfo("SLE link disabled");
     }
@@ -153,4 +172,73 @@ public class TmSleLink extends AbstractTmSleLink {
     public void onEndOfData() {
         eventProducer.sendInfo("SLE end of data received");
     }
+
+    private void sleStop() {
+        switch (rsuh.getState()) {
+        case UNBINDING:
+        case UNBOUND:
+        case STOPPING:
+            // Nothing to do.
+            break;
+        case READY:
+            sleUnbind();
+            break;
+        case ACTIVE:
+            rsuh.stop().handle((v, t) -> {
+                if (t != null) {
+                    eventProducer
+                            .sendWarning("Failed to stop: " + t.getMessage());
+                    return null;
+                }
+                log.debug("Successfully stopped the service");
+                sleUnbind();
+                return null;
+            });
+            break;
+        default:
+            eventProducer
+                    .sendWarning("Unexpected SLE state when stopping: "
+                            + rsuh.getState());
+            break;
+        }
+    }
+
+    private void sleUnbind() {
+        switch (rsuh.getState()) {
+        case UNBINDING:
+        case UNBOUND:
+            // Nothing to do.
+            break;
+        case STOPPING:
+        case READY:
+            rsuh.unbind().handle((v, t) -> {
+                if (t != null) {
+                    eventProducer
+                            .sendWarning(
+                                    "Failed to unbind: " + t.getMessage());
+                    return null;
+                }
+                log.debug("Successfully unbound the service");
+                signalUnbound();
+                return null;
+            });
+            break;
+        default:
+            eventProducer
+                    .sendWarning("Unexpected SLE state when unbinding: "
+                            + rsuh.getState());
+            break;
+        }
+    }
+
+    private synchronized void removeSemaphore() {
+        shutdownSemaphore = null;
+    }
+
+    private synchronized void signalUnbound() {
+        if (shutdownSemaphore != null) {
+            shutdownSemaphore.release();
+        }
+    }
+
 }
