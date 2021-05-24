@@ -1,8 +1,14 @@
 package org.yamcs.sle;
 
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.parameter.AggregateValue;
@@ -30,18 +36,15 @@ import org.yamcs.xtce.Member;
 import org.yamcs.xtce.SystemParameter;
 import org.yamcs.xtce.util.AggregateMemberNames;
 
-import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.SocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-
 public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements FrameConsumer {
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
     RacfServiceUserHandler rsuh;
+    /**
+     * The maximum amount of time, in milliseconds, to wait for the link to
+     * cleanly shut down before closing the TCP socket.
+     */
+    long maxShutdownDelayMillis;
 
     RacfSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
@@ -65,9 +68,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     /**
      * Creates a new UDP Frame Data Link
-     * 
+     *
      * @param deliveryMode
-     * 
+     *
      * @throws ConfigurationException
      *             if port is not defined in the configuration
      */
@@ -75,6 +78,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             throws ConfigurationException {
         super.init(instance, name, config);
         this.deliveryMode = deliveryMode;
+        this.maxShutdownDelayMillis = config.getLong("maxShutdownDelayMillis",
+                5000);
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
         service = config.getString("service", "RAF");
