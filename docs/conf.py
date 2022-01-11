@@ -41,7 +41,7 @@ latex_elements = {
 latex_documents = [
     (
         "index",
-        "yamcs-sle-plugin.tex",
+        "yamcs-sle.tex",
         "Yamcs: SLE Plugin",
         "Space Applications Services",
         "manual",
