@@ -6,6 +6,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.sle.Constants.DeliveryMode;
+import org.yamcs.sle.Constants.UnbindReason;
 import org.yamcs.sle.user.RafServiceUserHandler;
 import org.yamcs.sle.user.RcfServiceUserHandler;
 
@@ -58,13 +59,14 @@ import org.yamcs.sle.user.RcfServiceUserHandler;
  *
  */
 public class OfflineTmSleLink extends AbstractTmSleLink {
+
     RacfSleMonitor sleMonitor = new MyMonitor();
 
     LinkedBlockingQueue<RequestRange> requestQueue = new LinkedBlockingQueue<>();
 
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
         super.init(instance, name, config, DeliveryMode.rtnOffline);
-        reconnectionIntervalSec = -1;
+        sconf.reconnectionIntervalSec = -1;
     }
 
     @Override
@@ -74,18 +76,19 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doStop() {
-        if (rsuh != null) {
-            rsuh.shutdown();
-            rsuh = null;
-        }
+        Utils.sleStop(rsuh, sconf, eventProducer);
         notifyStopped();
+    }
+
+    void sleStop(UnbindReason unbindReason) {
+
     }
 
     void sleStart() {
         RequestRange rr = requestQueue.poll();
         if (rr == null) {
             eventProducer.sendInfo("All requests finished, disconnecting from SLE");
-            rsuh.shutdown();
+            Utils.sleStop(rsuh, sconf, eventProducer);
             rsuh = null;
         } else {
             eventProducer.sendInfo("Starting an offline request for interval " + rr);
@@ -110,7 +113,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     @Override
     protected void doDisable() {
         if (rsuh != null) {
-            rsuh.shutdown();
+            Utils.sleStop(rsuh, sconf, eventProducer);
             rsuh = null;
         }
     }

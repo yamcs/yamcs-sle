@@ -84,7 +84,6 @@ public class TmSleLink extends AbstractTmSleLink {
 
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
         super.init(instance, name, config, getDeliveryMode(config));
-        reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
     }
 
     private DeliveryMode getDeliveryMode(YConfiguration config) {
@@ -110,7 +109,7 @@ public class TmSleLink extends AbstractTmSleLink {
     @Override
     protected void doStop() {
         if (rsuh != null) {
-            rsuh.shutdown();
+            Utils.sleStop(rsuh, sconf, eventProducer);
             rsuh = null;
         }
         notifyStopped();
@@ -137,7 +136,7 @@ public class TmSleLink extends AbstractTmSleLink {
     @Override
     protected void doDisable() {
         if (rsuh != null) {
-            rsuh.shutdown();
+            Utils.sleStop(rsuh, sconf, eventProducer);
             rsuh = null;
         }
         eventProducer.sendInfo("SLE link disabled");

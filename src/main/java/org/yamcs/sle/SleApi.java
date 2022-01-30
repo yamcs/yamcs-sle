@@ -17,7 +17,6 @@ public class SleApi extends AbstractSleApi<Context> {
 
     @Override
     public void requestOfflineData(Context ctx, RequestOfflineDataRequest request, Observer<Empty> observer) {
-        System.out.println("request: "+request);
         if (!request.hasStart()) {
             throw new BadRequestException("Missing start");
         }

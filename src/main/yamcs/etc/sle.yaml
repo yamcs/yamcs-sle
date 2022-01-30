@@ -5,6 +5,10 @@ CommonSettings: &CommonSettings
   # which PDU contain the authentication: one of NONE, BIND or ALL  
   authLevel: BIND
 
+  # how many seconds the timestamp of the authentication token can differ from local time
+  #if the delta is greater than this, the message will be rejected
+  authenticationDelay: 180
+
   #version number sent in bind invocation
   versionNumber: 2
   #my username and password. The password is in hexadecimal
@@ -27,6 +31,7 @@ Providers:
     cltu:
       host: localhost 
       port: 25711
+      responderPortId: "port_1" #this overwrites the responderPortId set above
       serviceInstance: "sagr=SAGR.spack=SPACK.fsl-fg=FSL-FG.cltu=cltu1"
 
     raf-onlt:
@@ -47,6 +52,7 @@ Providers:
     rcf-onlt:
       host: localhost
       port: 25711
+      responderPortId: "port_2" #this overwrites the responderPortId set above
       serviceInstance: "sagr=SAGR.spack=SPACK.rsl-fg=RSL-FG.rcf=onlt1"
 
     rcf-onlc:

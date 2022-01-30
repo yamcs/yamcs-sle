@@ -73,10 +73,6 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     // but only after waiting waitForUplinkMsec before each frame
     int maxPendingFrames;
 
-    // how soon should reconnect in case the connection to the SLE provider is lost
-    // if negative, do not reconnect
-    int reconnectionIntervalSec;
-
     org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
 
     private SystemParameter sp_sleState, sp_cltuStatus, sp_numPendingFrames;
@@ -89,9 +85,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
     public void init(String yamcsInstance, String name, YConfiguration config) {
         super.init(yamcsInstance, name, config);
 
-        maxPendingFrames = config.getInt("maxPendingFrames", 20);
-        waitForUplinkMsec = config.getInt("waitForUplinkMsec", 5000);
-        reconnectionIntervalSec = config.getInt("reconnectionIntervalSec", 30);
+        this.maxPendingFrames = config.getInt("maxPendingFrames", 20);
+        this.waitForUplinkMsec = config.getInt("waitForUplinkMsec", 5000);
 
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
@@ -128,8 +123,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 csuh = null;
-                if (reconnectionIntervalSec >= 0) {
-                    workerGroup.schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
+                if (sconf.reconnectionIntervalSec >= 0) {
+                    workerGroup.schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
                 }
             } else {
                 sleBind();
@@ -148,9 +143,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
                     log.trace("New TC frame: {}\n\tdata: {}", tf, StringConverter.arrayToHexString(data));
                 }
 
-                if (cltuGenerator != null) {
-                    data = cltuGenerator.makeCltu(data);
-                }
+                data = encodeCltu(tf.getVirtualChannelId(), data);
 
                 if (!isUplinkPossible() && waitForUplinkMsec > 0) {
                     waitForUplink(waitForUplinkMsec);
@@ -295,7 +288,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
             thread.interrupt();
         }
         if (csuh != null) {
-            csuh.shutdown();
+            Utils.sleStop(csuh, sconf, eventProducer);
             csuh = null;
         }
         eventProducer.sendInfo("SLE link disabled");
@@ -349,8 +342,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
                 }
             }
 
-            if (isRunningAndEnabled() && reconnectionIntervalSec >= 0) {
-                getEventLoop().schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
+            if (isRunningAndEnabled() && sconf.reconnectionIntervalSec >= 0) {
+                getEventLoop().schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
             }
         }
 

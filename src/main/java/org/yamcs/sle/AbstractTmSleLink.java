@@ -48,10 +48,6 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     DeliveryMode deliveryMode;
     String service;
 
-    // how soon should reconnect in case the connection to the SLE provider is lost
-    // if negative, do not reconnect
-    int reconnectionIntervalSec;
-
     private org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
     private volatile ParameterValue rafStatus;
 
@@ -75,6 +71,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             throws ConfigurationException {
         super.init(instance, name, config);
         this.deliveryMode = deliveryMode;
+
+
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
         service = config.getString("service", "RAF");
@@ -138,8 +136,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 rsuh = null;
-                if (reconnectionIntervalSec >= 0) {
-                    workerGroup.schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
+                if (sconf.reconnectionIntervalSec >= 0) {
+                    workerGroup.schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
                 }
             } else {
                 sleBind();
@@ -268,8 +266,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
                 rsuh = null;
             }
 
-            if (isRunningAndEnabled() && reconnectionIntervalSec >= 0) {
-                getEventLoop().schedule(() -> connect(), reconnectionIntervalSec, TimeUnit.SECONDS);
+            if (isRunningAndEnabled() && sconf.reconnectionIntervalSec >= 0) {
+                getEventLoop().schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
             }
         }
 
