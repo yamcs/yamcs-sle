@@ -19,3 +19,7 @@ rcfSpacecraftId (integer)
 
 rcfVcId
     If ``service`` is RCF, this specifies the Virtual Channel requested via RCF. By default it is -1 meaning all Virtual Channels for the defined spacecraft. There is validation that this virtual channel is defined in the ``virtualChannels`` parameter part of the frame processing configuration.
+
+frameQuality
+    If ``service`` is RAF, this specifies the frame quality requested in the SLE START invocation. Valid values are ``goodFramesOnly``, ``erredFramesOnly`` or  ``allFrames``. RCF does not support this option, it only delivers good frames.
+    Default: ``goodFramesOnly``

@@ -13,6 +13,7 @@ import org.yamcs.sle.Constants.DeliveryMode;
 import org.yamcs.sle.Constants.FrameQuality;
 import org.yamcs.sle.Constants.LockStatus;
 import org.yamcs.sle.Constants.ProductionStatus;
+import org.yamcs.sle.Constants.RequestedFrameQuality;
 import org.yamcs.sle.user.FrameConsumer;
 import org.yamcs.sle.user.RacfServiceUserHandler;
 import org.yamcs.sle.user.RacfStatusReport;
@@ -46,6 +47,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     RacfSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
     DeliveryMode deliveryMode;
+
     String service;
 
     private org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
@@ -58,6 +60,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     // if null-> RAF, otherwise RCF
     GVCID gvcid = null;
+    private RequestedFrameQuality frameQuality;
 
     /**
      * Creates a new UDP Frame Data Link
@@ -73,6 +76,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         this.deliveryMode = deliveryMode;
 
 
+
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
         service = config.getString("service", "RAF");
@@ -82,7 +86,10 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             int spacecraftId = config.getInt("rcfSpacecraftId", frameHandler.getSpacecraftId());
             int vcId = config.getInt("rcfVcId", -1);
             gvcid = new GVCID(tfVersion, spacecraftId, vcId);
-        } else if (!"RAF".equals(service)) {
+        } else if ("RAF".equals(service)) {
+            this.frameQuality = config.getEnum("frameQuality", RequestedFrameQuality.class,
+                    RequestedFrameQuality.goodFramesOnly);
+        } else {
             throw new ConfigurationException("Invalid service '" + service + "' specified. Use one of RAF or RCF");
         }
         String type;
@@ -112,6 +119,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
                 + " as user " + sconf.auth.getMyUsername());
         if (gvcid == null) {
             rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
+            ((RafServiceUserHandler) rsuh).setRequestedFrameQuality(frameQuality);
         } else {
             rsuh = new RcfServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
         }
