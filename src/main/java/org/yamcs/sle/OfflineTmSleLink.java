@@ -128,6 +128,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     @Override
     public void onEndOfData() {
         eventProducer.sendInfo("SLE end of data received");
+
         rsuh.stop().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to stop: " + t.getMessage());
@@ -142,6 +143,15 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
         requestQueue.add(new RequestRange(start, stop));
         if (rsuh == null) {
             connect();
+        }
+    }
+
+    @Override
+    protected Status connectionStatus() {
+        if (requestQueue.isEmpty()) {
+            return Status.OK;
+        } else {
+            return (rsuh != null && rsuh.getState() == org.yamcs.sle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
         }
     }
 
