@@ -17,6 +17,9 @@ public class SleConfig {
     HeartbeatSettings hbSettings = new HeartbeatSettings();
     int tmlMaxLength = 300 * 1024;
 
+    // how long to wait for returning a call
+    int returnTimeoutSec;
+
     // the reason to send in the unbind call
     UnbindReason unbindReason;
 
@@ -44,6 +47,10 @@ public class SleConfig {
 
         this.reconnectionIntervalSec = tconfig.getInt("reconnectionIntervalSec",
                 config.getInt("reconnectionIntervalSec", 30));
+
+        this.returnTimeoutSec = tconfig.getInt("returnTimeoutSec",
+                config.getInt("returnTimeoutSec", 30));
+
 
         String initiatorId = config.getString("initiatorId");
         auth = getAuthentication(config);

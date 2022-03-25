@@ -1,6 +1,7 @@
 package org.yamcs.sle;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.yamcs.ConfigurationException;
@@ -39,7 +40,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
-public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements FrameConsumer {
+public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements FrameConsumer, SleLink {
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
     RacfServiceUserHandler rsuh;
@@ -125,6 +126,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
         rsuh.setVersionNumber(sconf.versionNumber);
         rsuh.setAuthLevel(sconf.authLevel);
+        rsuh.setReturnTimeoutSec(sconf.returnTimeoutSec);
         rsuh.addMonitor(sleMonitor);
 
         NioEventLoopGroup workerGroup = getEventLoop();
@@ -252,6 +254,15 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             list.add(rafStatus);
             rafStatus = null;
         }
+    }
+
+    @Override
+    public CompletableFuture<SleParameter> getParameter(ParameterName paraName) {
+        RacfServiceUserHandler _rsuh = rsuh;
+        if (_rsuh == null || !_rsuh.isConnected()) {
+            throw new SleException("link not connected");
+        }
+        return _rsuh.getParameter(paraName.id());
     }
 
     class MyMonitor implements RacfSleMonitor {

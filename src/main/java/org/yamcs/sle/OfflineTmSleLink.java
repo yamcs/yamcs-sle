@@ -6,6 +6,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.sle.Constants.DeliveryMode;
+import org.yamcs.sle.Constants.FrameQuality;
 import org.yamcs.sle.Constants.UnbindReason;
 import org.yamcs.sle.user.RafServiceUserHandler;
 import org.yamcs.sle.user.RcfServiceUserHandler;
@@ -59,10 +60,10 @@ import org.yamcs.sle.user.RcfServiceUserHandler;
  *
  */
 public class OfflineTmSleLink extends AbstractTmSleLink {
-
     RacfSleMonitor sleMonitor = new MyMonitor();
-
     LinkedBlockingQueue<RequestRange> requestQueue = new LinkedBlockingQueue<>();
+    volatile int numRequests;
+    int lastReqFrameCount;
 
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
         super.init(instance, name, config, DeliveryMode.rtnOffline);
@@ -92,12 +93,14 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
             rsuh = null;
         } else {
             eventProducer.sendInfo("Starting an offline request for interval " + rr);
+            lastReqFrameCount = 0;
             CompletableFuture<Void> cf;
             if (gvcid == null) {
                 cf = ((RafServiceUserHandler) rsuh).start(rr.start, rr.stop);
             } else {
                 cf = ((RcfServiceUserHandler) rsuh).start(rr.start, rr.stop, gvcid);
             }
+
             cf.handle((v, t) -> {
                 if (t != null) {
                     eventProducer.sendWarning("Request for interval " + rr + " failed: " + t);
@@ -105,9 +108,17 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
                     sleStart();
                     return null;
                 }
+                numRequests++;
                 return null;
             });
         }
+    }
+
+    @Override
+    public void acceptFrame(CcsdsTime ert, AntennaId antennaId, int dataLinkContinuity,
+            FrameQuality frameQuality, byte[] privAnn, byte[] data) {
+        lastReqFrameCount++;
+        super.acceptFrame(ert, antennaId, dataLinkContinuity, frameQuality, privAnn, data);
     }
 
     @Override
@@ -127,7 +138,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
 
     @Override
     public void onEndOfData() {
-        eventProducer.sendInfo("SLE end of data received");
+        eventProducer.sendInfo("SLE end of data received. " + lastReqFrameCount + " frames received");
 
         rsuh.stop().handle((v, t) -> {
             if (t != null) {
@@ -153,6 +164,11 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
         } else {
             return (rsuh != null && rsuh.getState() == org.yamcs.sle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
         }
+    }
+
+    @Override
+    public long getDataOutCount() {
+        return numRequests;
     }
 
     static class RequestRange {

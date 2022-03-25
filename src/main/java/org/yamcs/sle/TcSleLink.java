@@ -2,6 +2,7 @@ package org.yamcs.sle;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -48,7 +49,7 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
  * @author nm
  *
  */
-public class TcSleLink extends AbstractTcFrameLink implements Runnable {
+public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink {
     FrameErrorDetection errorCorrection;
 
     SleConfig sconf;
@@ -104,6 +105,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
         csuh = new CltuServiceUserHandler(sconf.auth, sconf.attr);
         csuh.setVersionNumber(sconf.versionNumber);
         csuh.setAuthLevel(sconf.authLevel);
+        csuh.setReturnTimeoutSec(sconf.returnTimeoutSec);
+
         csuh.addMonitor(sleMonitor);
 
         NioEventLoopGroup workerGroup = getEventLoop();
@@ -417,4 +420,21 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable {
         }
     }
 
+    public CompletableFuture<Void> throwEvent(int eventIdentifier, byte[] eventQualifier) {
+        CltuServiceUserHandler _csuh = csuh;
+        if (_csuh == null || !_csuh.isConnected()) {
+            throw new SleException("SLE link is not connected");
+        }
+        return _csuh.throwEvent(eventIdentifier, eventQualifier);
+
+    }
+
+    @Override
+    public CompletableFuture<SleParameter> getParameter(ParameterName paraName) {
+        CltuServiceUserHandler _csuh = csuh;
+        if (_csuh == null || !_csuh.isConnected()) {
+            throw new SleException("link not connected");
+        }
+        return _csuh.getParameter(paraName.id());
+    }
 }

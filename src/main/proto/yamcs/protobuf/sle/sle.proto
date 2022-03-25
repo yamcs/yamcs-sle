@@ -12,10 +12,29 @@ import "google/protobuf/timestamp.proto";
 import "yamcs/api/annotations.proto";
  
 service SleApi {
-  // Request Offline Data
+  // Request Offline Data. Can be used on the OfflineTmSleLink links
   rpc RequestOfflineData(RequestOfflineDataRequest) returns (google.protobuf.Empty) {
     option (yamcs.api.route) = {
       post: "/api/sle/links/{instance}/{linkName}:requestOfflineData"
+      body: "*"
+    };
+  }
+
+  // Invoke a CLTU Throw Event. Used for the TcSleLink links
+  rpc CltuThrowEvent(CltuThrowEventRequest) returns (CltuThrowEventResponse) {
+    option (yamcs.api.route) = {
+      post: "/api/sle/links/{instance}/{linkName}:throwEvent"
+      body: "*"
+    };
+  }
+
+  //Invoke a SLE Get Parameter.
+  // Can be used for all SLE links but some parameters make sense only for certain links
+  // The parameterName is one from  org.yamcs.sle.ParameterName enum
+  // Providing an invalid name will return a list with all parameters.
+  rpc GetParameter(GetParameterRequest) returns (GetParameterResponse) {
+    option (yamcs.api.route) = {
+      get: "/api/sle/links/{instance}/{linkName}/{parameterName}"
       body: "*"
     };
   }
@@ -26,4 +45,69 @@ message RequestOfflineDataRequest {
   optional string linkName = 2;
   optional google.protobuf.Timestamp start = 3;
   optional google.protobuf.Timestamp stop = 4;
+}
+
+//Parameters of the throw event invocation
+//The CCSDS FCLTU standard does not define them but gives some examples in annex F, see below.
+// In these examples he eventQualifier is an ASCII encoded string.
+//
+//Enable or disable command modulation of the carrier.
+//  eventIdentifier: 1
+//  eventQualifier: on|off
+//
+//Change bit rate to new bit rate defined by <BR> (requested new bit rate is the value of <BR> in bits/second)
+//  eventIdentifier:2
+//  eventQualifier: br <BR> [7.8125 – 4000.0]
+//
+//Change modulation index to new modulation index angle defined by <MI?(requested new modulation index is the value of <MI> in milli-radians). 
+//  eventIdentifier: 3
+//  eventQualifier: mi <MI> [1 – 1570]
+//
+//Change both bit rate and modulation index as described above.
+//  eventIdentifier: 4
+//  eventQualifier: br <BR> mi <MI>
+//
+//For convenience, the message below allows the event qualifier to be specified either as string or as binary. Only one of them can be used at a time.
+//The SLE throw message requires a binary; the string will be converted to binary using UTF8 encoding.
+message CltuThrowEventRequest {
+  optional string instance = 1;
+  optional string linkName = 2;
+
+  optional uint32 eventIdentifier = 3;
+  optional string eventQualifier = 4;
+  optional bytes eventQualifierBinary = 5;
+}
+
+//If the CLTU Throw event is successfull, the return contains only the event id.
+// Otherwise the error field will contain the error.
+message CltuThrowEventResponse {
+   //this is the event identifier passed in the request
+   optional int32 eventIdentifier =1;
+   //if there was an error, this contains the error, otherwise it is not set
+   optional string error = 2;
+}
+
+message GetParameterRequest {
+  optional string instance = 1;
+  optional string linkName = 2;
+  optional string parameterName = 3;
+}
+
+//The parameter response contains the parameter name and the value
+//The value can be of different types depending on the parameter
+//
+// If the parameter is not available on the provider or if the link is not connected, the error field will be populated
+// (If the parameter name is not correct, a HTTP 400 bar request is returned instead of this response)
+//
+// The parameter value returned by the provider may be null. In this case the response will contain only the parameter name with no other field populated
+message GetParameterResponse {
+	optional string parameterName = 1;
+	optional string error = 2;
+	optional int32 intValue = 3;
+	//the long value is used for the 32 bits unsigned parameters
+	// The only parameter of that type is the CLTU minimumDelayTime which is the The minimum guard time the F-CLTU provider will accept
+    // between two consecutive CLTUs. It is very likely that the value will be smal enough (2147 seconds) to fit into the intValue 
+	// which means that the longValue will most certanly never be used.
+	optional int64 longValue = 4;
+	optional string stringValue = 5;
 }
