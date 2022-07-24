@@ -322,7 +322,14 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     @Override
     protected Status connectionStatus() {
-        return isUplinkPossible() ? Status.OK : Status.UNAVAIL;
+        CltuServiceUserHandler _csuh = csuh;
+
+        if (_csuh != null && _csuh.isConnected() && sleState == org.yamcs.sle.State.ACTIVE
+                && prodStatus == CltuProductionStatus.operational) {
+            return Status.OK;
+        } else {
+            return Status.UNAVAIL;
+        }
     }
 
     class MyMonitor implements CltuSleMonitor {
