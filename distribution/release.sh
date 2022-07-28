@@ -40,6 +40,7 @@ mvn -q clean
 
 clonedir=$home/distribution/target/yamcs-sle-clone
 
+rm -rf $clonedir 
 mkdir -p $clonedir
 git clone . $clonedir
 rm -rf $clonedir/.git

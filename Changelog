@@ -1,4 +1,4 @@
-Version 1.4.0
+Version 1.4.0 released 28-Jul-2022
 - changed the link status of the offline link to show green (OK) when there is no request pending (even though it is disconnected from the SLE service provider)
 - implemented get parameter and CLTU throw event
 
