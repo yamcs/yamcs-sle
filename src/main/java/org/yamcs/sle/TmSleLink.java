@@ -17,6 +17,7 @@ import org.yamcs.sle.user.RcfServiceUserHandler;
  * The SLE specific settings are loaded from sle.yaml based on the sleProvider key specified in the link configuration.
  * The description of the sle.yaml configuration parameters are as follows:
  * <table border=1>
+ * <caption>Configuration Parameters</caption>
  * <tr>
  * <td>initiatorId</td>
  * <td>identifier of the local application</td>
@@ -25,6 +26,7 @@ import org.yamcs.sle.user.RcfServiceUserHandler;
  * <td>responderPortId</td>
  * <td>Responder Port Identifier</td>
  * </tr>
+ * <tr>
  * <td>versionNumber</td>
  * <td>the version number is sent in the bind invocation. We only support the version of the SLE valid in April-2019;
  * however this field is not checked.</td>
