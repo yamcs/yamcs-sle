@@ -14,10 +14,15 @@ import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersService;
 import org.yamcs.protobuf.Yamcs.Value.Type;
-import org.yamcs.sle.Constants.CltuProductionStatus;
-import org.yamcs.sle.Constants.UplinkStatus;
-import org.yamcs.sle.user.CltuServiceUserHandler;
-import org.yamcs.sle.user.CltuSleMonitor;
+import org.yamcs.jsle.CcsdsTime;
+import org.yamcs.jsle.Constants.CltuProductionStatus;
+import org.yamcs.jsle.Constants.UplinkStatus;
+import org.yamcs.jsle.Isp1Handler;
+import org.yamcs.jsle.ParameterName;
+import org.yamcs.jsle.SleException;
+import org.yamcs.jsle.SleParameter;
+import org.yamcs.jsle.user.CltuServiceUserHandler;
+import org.yamcs.jsle.user.CltuSleMonitor;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
 
 import org.yamcs.tctm.ccsds.TcTransferFrame;
@@ -74,7 +79,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     // but only after waiting waitForUplinkMsec before each frame
     int maxPendingFrames;
 
-    org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
+    org.yamcs.jsle.State sleState = org.yamcs.jsle.State.UNBOUND;
 
     private SystemParameter sp_sleState, sp_cltuStatus, sp_numPendingFrames;
     final static AggregateMemberNames cltuStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
@@ -177,7 +182,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     private boolean isUplinkPossible() {
         return (csuh != null) && csuh.isConnected() && pendingFrames.size() < maxPendingFrames
-                && sleState == org.yamcs.sle.State.ACTIVE
+                && sleState == org.yamcs.jsle.State.ACTIVE
                 && prodStatus == CltuProductionStatus.operational;
     }
 
@@ -253,7 +258,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     public void setupSystemParameters(SystemParametersService sps) {
         super.setupSystemParameters(sps);
 
-        sp_sleState = sps.createEnumeratedSystemParameter(linkName + "/sleState", org.yamcs.sle.State.class,
+        sp_sleState = sps.createEnumeratedSystemParameter(linkName + "/sleState", org.yamcs.jsle.State.class,
                 "The state of the SLE connection");
 
         sp_numPendingFrames = sps.createSystemParameter(linkName + "/numPendingFrames", Type.SINT32,
@@ -324,7 +329,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     protected Status connectionStatus() {
         CltuServiceUserHandler _csuh = csuh;
 
-        if (_csuh != null && _csuh.isConnected() && sleState == org.yamcs.sle.State.ACTIVE
+        if (_csuh != null && _csuh.isConnected() && sleState == org.yamcs.jsle.State.ACTIVE
                 && prodStatus == CltuProductionStatus.operational) {
             return Status.OK;
         } else {
@@ -358,7 +363,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         }
 
         @Override
-        public void stateChanged(org.yamcs.sle.State newState) {
+        public void stateChanged(org.yamcs.jsle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
         }

@@ -10,16 +10,24 @@ import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersService;
 import org.yamcs.protobuf.Yamcs.Value.Type;
-import org.yamcs.sle.Constants.DeliveryMode;
-import org.yamcs.sle.Constants.FrameQuality;
-import org.yamcs.sle.Constants.LockStatus;
-import org.yamcs.sle.Constants.ProductionStatus;
-import org.yamcs.sle.Constants.RequestedFrameQuality;
-import org.yamcs.sle.user.FrameConsumer;
-import org.yamcs.sle.user.RacfServiceUserHandler;
-import org.yamcs.sle.user.RacfStatusReport;
-import org.yamcs.sle.user.RafServiceUserHandler;
-import org.yamcs.sle.user.RcfServiceUserHandler;
+import org.yamcs.jsle.AntennaId;
+import org.yamcs.jsle.CcsdsTime;
+import org.yamcs.jsle.Constants.DeliveryMode;
+import org.yamcs.jsle.Constants.FrameQuality;
+import org.yamcs.jsle.Constants.LockStatus;
+import org.yamcs.jsle.Constants.ProductionStatus;
+import org.yamcs.jsle.Constants.RequestedFrameQuality;
+import org.yamcs.jsle.GVCID;
+import org.yamcs.jsle.Isp1Handler;
+import org.yamcs.jsle.ParameterName;
+import org.yamcs.jsle.RacfSleMonitor;
+import org.yamcs.jsle.SleException;
+import org.yamcs.jsle.SleParameter;
+import org.yamcs.jsle.user.FrameConsumer;
+import org.yamcs.jsle.user.RacfServiceUserHandler;
+import org.yamcs.jsle.user.RacfStatusReport;
+import org.yamcs.jsle.user.RafServiceUserHandler;
+import org.yamcs.jsle.user.RcfServiceUserHandler;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.AbstractTmFrameLink;
 import org.yamcs.time.Instant;
@@ -51,7 +59,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     String service;
 
-    private org.yamcs.sle.State sleState = org.yamcs.sle.State.UNBOUND;
+    private org.yamcs.jsle.State sleState = org.yamcs.jsle.State.UNBOUND;
     private volatile ParameterValue rafStatus;
 
     private SystemParameter sp_sleState, sp_racfStatus;
@@ -170,7 +178,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     @Override
     protected Status connectionStatus() {
-        return (rsuh != null && rsuh.getState() == org.yamcs.sle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
+        return (rsuh != null && rsuh.getState() == org.yamcs.jsle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
     }
 
     @Override
@@ -226,7 +234,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     @Override
     public void setupSystemParameters(SystemParametersService sps) {
         super.setupSystemParameters(sps);
-        sp_sleState = sps.createEnumeratedSystemParameter(linkName + "/sleState", org.yamcs.sle.State.class,
+        sp_sleState = sps.createEnumeratedSystemParameter(linkName + "/sleState", org.yamcs.jsle.State.class,
                 "The state of the SLE connection");
 
         EnumeratedParameterType lockStatusType = sps.createEnumeratedParameterType(LockStatus.class);
@@ -291,7 +299,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
 
         @Override
-        public void stateChanged(org.yamcs.sle.State newState) {
+        public void stateChanged(org.yamcs.jsle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
         }

@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.yamcs.jsle.CcsdsTime;
 import org.yamcs.time.Instant;
 import org.yamcs.utils.TimeEncoding;
 

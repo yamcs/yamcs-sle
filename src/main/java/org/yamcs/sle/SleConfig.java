@@ -2,9 +2,11 @@ package org.yamcs.sle;
 
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
-import org.yamcs.sle.Constants.UnbindReason;
-import org.yamcs.sle.Isp1Handler.HeartbeatSettings;
-import org.yamcs.sle.user.SleAttributes;
+import org.yamcs.jsle.AuthLevel;
+import org.yamcs.jsle.Constants.UnbindReason;
+import org.yamcs.jsle.Isp1Authentication;
+import org.yamcs.jsle.Isp1Handler.HeartbeatSettings;
+import org.yamcs.jsle.user.SleAttributes;
 import org.yamcs.utils.StringConverter;
 
 public class SleConfig {

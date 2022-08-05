@@ -5,7 +5,7 @@ import java.util.function.BiFunction;
 
 import org.yamcs.YamcsServer;
 import org.yamcs.events.EventProducer;
-import org.yamcs.sle.user.AbstractServiceUserHandler;
+import org.yamcs.jsle.user.AbstractServiceUserHandler;
 
 public class Utils {
     /**

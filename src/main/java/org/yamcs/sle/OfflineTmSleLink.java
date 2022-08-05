@@ -5,11 +5,14 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
-import org.yamcs.sle.Constants.DeliveryMode;
-import org.yamcs.sle.Constants.FrameQuality;
-import org.yamcs.sle.Constants.UnbindReason;
-import org.yamcs.sle.user.RafServiceUserHandler;
-import org.yamcs.sle.user.RcfServiceUserHandler;
+import org.yamcs.jsle.AntennaId;
+import org.yamcs.jsle.CcsdsTime;
+import org.yamcs.jsle.Constants.DeliveryMode;
+import org.yamcs.jsle.Constants.FrameQuality;
+import org.yamcs.jsle.Constants.UnbindReason;
+import org.yamcs.jsle.RacfSleMonitor;
+import org.yamcs.jsle.user.RafServiceUserHandler;
+import org.yamcs.jsle.user.RcfServiceUserHandler;
 
 /**
  * Receives TM frames via SLE. The Virtual Channel configuration is identical with the configuration of
@@ -163,7 +166,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
         if (requestQueue.isEmpty()) {
             return Status.OK;
         } else {
-            return (rsuh != null && rsuh.getState() == org.yamcs.sle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
+            return (rsuh != null && rsuh.getState() == org.yamcs.jsle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
         }
     }
 

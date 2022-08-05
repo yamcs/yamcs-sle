@@ -6,9 +6,10 @@ import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.tctm.ccsds.UdpTmFrameLink;
 
-import org.yamcs.sle.Constants.DeliveryMode;
-import org.yamcs.sle.user.RafServiceUserHandler;
-import org.yamcs.sle.user.RcfServiceUserHandler;
+import org.yamcs.jsle.Constants.DeliveryMode;
+import org.yamcs.jsle.RacfSleMonitor;
+import org.yamcs.jsle.user.RafServiceUserHandler;
+import org.yamcs.jsle.user.RcfServiceUserHandler;
 
 /**
  * Receives TM frames via SLE. The Virtual Channel configuration is identical with the configuration of
