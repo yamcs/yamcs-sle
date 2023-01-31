@@ -12,7 +12,34 @@ import "google/protobuf/timestamp.proto";
 import "yamcs/api/annotations.proto";
  
 service SleApi {
-  // Request Offline Data. Can be used on the OfflineTmSleLink links
+  // Request offline data.
+  //
+  // This request can be used to obtain offline data from an SLE provider. The
+  // link has to be of type ``org.yamcs.sle.OfflineTmSleLink``.
+  //
+  // ``start`` and ``stop`` are passed as parameters to the RAF-START SLE
+  // request. The SLE provider will deliver all frames having their Earth
+  // Reception Time (ERT) in the [start, stop] time interval, both ends are
+  // inclusive. SLE requires that start is strictly smaller than stop so
+  // ``start=stop`` is not accepted.
+  //
+  // The time passed via API is at nanosecond resolution whereas the time passed
+  // in the RAF-START SLE request is at microsecond or picosecond resolution
+  // (depending on the SLE version used).
+  //
+  //
+  // .. rubric:: Leap seconds
+  //
+  // Time passed via the API is according to
+  // the `Timestamp <https://protobuf.dev/reference/protobuf/google.protobuf/#timestamp>`_
+  // protobuf message and is passed *unsmeared* to the SLE request. This is
+  // different from the normal requests to Yamcs where the time is transformed
+  // into internal Yamcs time (but at millisecond resolution!) by performing
+  // reverse smearing around the leap seconds.
+  //
+  // This means that it is not possible to specify a retrieval that starts or
+  // stops on a leap second. For example ``2016-12-31T23:59:60Z`` will be
+  // effectively translated into ``2017-01-01T00:00:00Z``.
   rpc RequestOfflineData(RequestOfflineDataRequest) returns (google.protobuf.Empty) {
     option (yamcs.api.route) = {
       post: "/api/sle/links/{instance}/{linkName}:requestOfflineData"
@@ -20,7 +47,9 @@ service SleApi {
     };
   }
 
-  // Invoke a CLTU Throw Event. Used for the TcSleLink links
+  // Invoke a CLTU Throw Event.
+  //
+  // The link has to be of type ``org.yamcs.sle.OfflineTmSleLink``.
   rpc CltuThrowEvent(CltuThrowEventRequest) returns (CltuThrowEventResponse) {
     option (yamcs.api.route) = {
       post: "/api/sle/links/{instance}/{linkName}:throwEvent"
@@ -28,10 +57,9 @@ service SleApi {
     };
   }
 
-  //Invoke a SLE Get Parameter.
-  // Can be used for all SLE links but some parameters make sense only for certain links
-  // The parameterName is one from  org.yamcs.sle.ParameterName enum
-  // Providing an invalid name will return a list with all parameters.
+  // Invoke a SLE Get Parameter.
+  //
+  // Can be used for all SLE links but some parameters make sense only for certain links.
   rpc GetParameter(GetParameterRequest) returns (GetParameterResponse) {
     option (yamcs.api.route) = {
       get: "/api/sle/links/{instance}/{linkName}/{parameterName}"
@@ -41,36 +69,50 @@ service SleApi {
 }
 
 message RequestOfflineDataRequest {
+  // Yamcs instance name
   optional string instance = 1;
+  
+  // Link name
   optional string linkName = 2;
+  
+  // Start of the retrieval interval
   optional google.protobuf.Timestamp start = 3;
+  
+  // End of the retrieval interval
   optional google.protobuf.Timestamp stop = 4;
 }
 
-//Parameters of the throw event invocation
-//The CCSDS FCLTU standard does not define them but gives some examples in annex F, see below.
-// In these examples he eventQualifier is an ASCII encoded string.
+// The CCSDS FCLTU standard does not define parameters of the throw
+// event invocation but gives some examples in annex F, see below.
 //
-//Enable or disable command modulation of the carrier.
-//  eventIdentifier: 1
-//  eventQualifier: on|off
+// In these examples ``eventQualifier`` is an ASCII encoded string.
 //
-//Change bit rate to new bit rate defined by <BR> (requested new bit rate is the value of <BR> in bits/second)
-//  eventIdentifier:2
-//  eventQualifier: br <BR> [7.8125 – 4000.0]
+// Enable or disable command modulation of the carrier.
+//   eventIdentifier: 1
+//   eventQualifier: on|off
 //
-//Change modulation index to new modulation index angle defined by <MI?(requested new modulation index is the value of <MI> in milli-radians). 
-//  eventIdentifier: 3
-//  eventQualifier: mi <MI> [1 – 1570]
+// Change bit rate to new bit rate defined by <BR> (requested new bit rate is the value of <BR> in bits/second)
+//   eventIdentifier:2
+//   eventQualifier: br <BR> [7.8125 – 4000.0]
 //
-//Change both bit rate and modulation index as described above.
-//  eventIdentifier: 4
-//  eventQualifier: br <BR> mi <MI>
+// Change modulation index to new modulation index angle defined by <MI>
+// (requested new modulation index is the value of <MI> in milli-radians). 
+//   eventIdentifier: 3
+//   eventQualifier: mi <MI> [1 – 1570]
 //
-//For convenience, the message below allows the event qualifier to be specified either as string or as binary. Only one of them can be used at a time.
-//The SLE throw message requires a binary; the string will be converted to binary using UTF8 encoding.
+// Change both bit rate and modulation index as described above.
+//   eventIdentifier: 4
+//   eventQualifier: br <BR> mi <MI>
+//
+// For convenience, the message below allows the event qualifier to be specified
+// either as string or as binary. Only one of them can be used at a time.
+// The SLE throw message requires a binary; the string will be converted to binary
+// using UTF-8 encoding.
 message CltuThrowEventRequest {
+  // Yamcs instance name
   optional string instance = 1;
+  
+  // Link name
   optional string linkName = 2;
 
   optional uint32 eventIdentifier = 3;
@@ -78,36 +120,51 @@ message CltuThrowEventRequest {
   optional bytes eventQualifierBinary = 5;
 }
 
-//If the CLTU Throw event is successfull, the return contains only the event id.
-// Otherwise the error field will contain the error.
+// If the CLTU Throw event is successful, the return contains only the
+// event id. Otherwise the error field will contain the error.
 message CltuThrowEventResponse {
-   //this is the event identifier passed in the request
+   // Event identifier passed in the request
    optional int32 eventIdentifier =1;
-   //if there was an error, this contains the error, otherwise it is not set
+
+   // Error, if there was one
    optional string error = 2;
 }
 
 message GetParameterRequest {
+  // Yamcs instance name
   optional string instance = 1;
+
+  // Link name
   optional string linkName = 2;
+
+  // Parameter name
+  //
+  // One from  org.yamcs.sle.ParameterName enum.
+  // Providing an invalid name will return a list with all parameters.
   optional string parameterName = 3;
 }
 
-//The parameter response contains the parameter name and the value
-//The value can be of different types depending on the parameter
+// The parameter response contains the parameter name and the value.
+// The value can be of different types depending on the parameter.
 //
-// If the parameter is not available on the provider or if the link is not connected, the error field will be populated
-// (If the parameter name is not correct, a HTTP 400 bar request is returned instead of this response)
+// If the parameter is not available on the provider or if the link
+// is not connected, the error field will be populated (if the parameter
+// name is not correct, an HTTP 400 'Bad Request' error is returned instead).
 //
-// The parameter value returned by the provider may be null. In this case the response will contain only the parameter name with no other field populated
+// The parameter value returned by the provider may be null. In this case the
+// response will contain only the parameter name with no other field populated
 message GetParameterResponse {
-	optional string parameterName = 1;
-	optional string error = 2;
-	optional int32 intValue = 3;
-	//the long value is used for the 32 bits unsigned parameters
-	// The only parameter of that type is the CLTU minimumDelayTime which is the The minimum guard time the F-CLTU provider will accept
-    // between two consecutive CLTUs. It is very likely that the value will be smal enough (2147 seconds) to fit into the intValue 
-	// which means that the longValue will most certanly never be used.
-	optional int64 longValue = 4;
-	optional string stringValue = 5;
+  // Parameter name
+  optional string parameterName = 1;
+  optional string error = 2;
+  optional int32 intValue = 3;
+
+  //the long value is used for the 32 bits unsigned parameters
+  // The only parameter of that type is the CLTU minimumDelayTime which is the
+  // minimum guard time the F-CLTU provider will accept between two consecutive
+  // CLTUs. It is very likely that the value will be small enough (2147 seconds)
+  // to fit into the intValue which means that the longValue will most certainly
+  // never be used.
+  optional int64 longValue = 4;
+  optional string stringValue = 5;
 }

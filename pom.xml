@@ -141,7 +141,7 @@
 					<checkStaleness>true</checkStaleness>
 					<descriptorSetFileName>${project.artifactId}.protobin</descriptorSetFileName>
 					<descriptorSetOutputDirectory>${project.build.directory}/generated-resources/protobuf</descriptorSetOutputDirectory>
-					<includeDependenciesInDescriptorSet>false</includeDependenciesInDescriptorSet>
+					<includeDependenciesInDescriptorSet>true</includeDependenciesInDescriptorSet>
 					<includeSourceInfoInDescriptorSet>true</includeSourceInfoInDescriptorSet>
 					<protocPlugins>
 						<protocPlugin>
