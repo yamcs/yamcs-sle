@@ -90,6 +90,8 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     }
 
     void sleStart() {
+        requestedState = org.yamcs.jsle.State.ACTIVE;
+
         RequestRange rr = requestQueue.poll();
         if (rr == null) {
             eventProducer.sendInfo("All requests finished, disconnecting from SLE");
@@ -136,7 +138,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     @Override
     protected void doEnable() throws Exception {
         if (!requestQueue.isEmpty()) {
-            connect();
+            connectAndBind(startSleOnEnable);
         }
     }
 
@@ -157,7 +159,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     public synchronized void addRequest(CcsdsTime start, CcsdsTime stop) {
         requestQueue.add(new RequestRange(start, stop));
         if (rsuh == null) {
-            connect();
+            connectAndBind(startSleOnEnable);
         }
     }
 

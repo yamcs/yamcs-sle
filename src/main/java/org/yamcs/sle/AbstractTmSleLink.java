@@ -1,9 +1,11 @@
 package org.yamcs.sle;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import com.google.gson.JsonObject;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.parameter.AggregateValue;
@@ -28,6 +30,8 @@ import org.yamcs.jsle.user.RacfServiceUserHandler;
 import org.yamcs.jsle.user.RacfStatusReport;
 import org.yamcs.jsle.user.RafServiceUserHandler;
 import org.yamcs.jsle.user.RcfServiceUserHandler;
+import org.yamcs.tctm.Link;
+import org.yamcs.tctm.LinkAction;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.AbstractTmFrameLink;
 import org.yamcs.time.Instant;
@@ -59,7 +63,10 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     String service;
 
-    private org.yamcs.jsle.State sleState = org.yamcs.jsle.State.UNBOUND;
+    org.yamcs.jsle.State sleState = org.yamcs.jsle.State.UNBOUND;
+
+    org.yamcs.jsle.State requestedState = org.yamcs.jsle.State.UNBOUND;
+
     private volatile ParameterValue rafStatus;
 
     private SystemParameter sp_sleState, sp_racfStatus;
@@ -70,6 +77,27 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     // if null-> RAF, otherwise RCF
     GVCID gvcid = null;
     private RequestedFrameQuality frameQuality;
+
+    boolean startSleOnEnable;
+
+    LinkAction startAction = new LinkAction("start", "Start SLE") {
+        @Override
+        public JsonObject execute(Link link, JsonObject jsonObject) {
+            if (requestedState == org.yamcs.jsle.State.UNBOUND) {
+                connectAndBind(true);
+            } else {
+                sleStart();
+            }
+            return null;
+        }
+    };
+    LinkAction stopAction = new LinkAction("stop", "Stop SLE") {
+        @Override
+        public JsonObject execute(Link link, JsonObject jsonObject) {
+            sleStop();
+            return null;
+        }
+    };
 
     /**
      * Creates a new UDP Frame Data Link
@@ -88,6 +116,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
+        this.startSleOnEnable = config.getBoolean("startSleOnEnable", true);
+
         service = config.getString("service", "RAF");
         gvcid = null;
         if ("RCF".equals(service)) {
@@ -120,10 +150,12 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     }
 
-    protected synchronized void connect() {
+    protected synchronized void connectAndBind(boolean startSle) {
         if (!isRunningAndEnabled()) {
             return;
         }
+        requestedState = org.yamcs.jsle.State.READY;
+
         eventProducer.sendInfo("Connecting to SLE " + service + " service " + sconf.host + ":" + sconf.port
                 + " as user " + sconf.auth.getMyUsername());
         if (gvcid == null) {
@@ -155,30 +187,57 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 rsuh = null;
                 if (sconf.reconnectionIntervalSec >= 0) {
-                    workerGroup.schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
+                    workerGroup.schedule(() -> connectAndBind(startSle), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
                 }
             } else {
-                sleBind();
+                sleBind(startSle);
             }
         });
     }
 
-    private void sleBind() {
+    private void sleBind(boolean startSle) {
+        requestedState = org.yamcs.jsle.State.READY;
+
         rsuh.bind().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to bind: " + t.getMessage());
                 return null;
             }
-            sleStart();
+            if (startSle) {
+                sleStart();
+            }
             return null;
         });
     }
 
     abstract void sleStart();
 
+    void sleStop() {
+        requestedState = org.yamcs.jsle.State.READY;
+        log.debug("Stopping SLE service");
+
+        rsuh.stop().handle((v, t) -> {
+            if (t != null) {
+                eventProducer.sendWarning("Failed to stop: " + t);
+                return null;
+            }
+            log.debug("Successfully stopped the service");
+            return null;
+        });
+    }
+
+    /**
+     * Verifies that the requested state is the same as the current state
+     * @return Status.OK or Status.UNAVAIL
+     */
     @Override
     protected Status connectionStatus() {
-        return (rsuh != null && rsuh.getState() == org.yamcs.jsle.State.ACTIVE) ? Status.OK : Status.UNAVAIL;
+        return sleState != org.yamcs.jsle.State.UNBOUND && sleState == requestedState ? Status.OK : Status.UNAVAIL;
+    }
+
+    @Override
+    public Map<String, Object> getExtraInfo() {
+        return Map.of("SLE state", sleState);
     }
 
     @Override
@@ -294,7 +353,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             }
 
             if (isRunningAndEnabled() && sconf.reconnectionIntervalSec >= 0) {
-                getEventLoop().schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
+                getEventLoop().schedule(() -> connectAndBind(requestedState == org.yamcs.jsle.State.ACTIVE), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
             }
         }
 
@@ -302,6 +361,31 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         public void stateChanged(org.yamcs.jsle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
+            if (stopAction != null && startAction != null) {
+                if (!isEffectivelyDisabled()) {
+                    switch (sleState) {
+                    case UNBOUND:
+                    case READY:
+                        startAction.setEnabled(true);
+                        stopAction.setEnabled(false);
+                        break;
+                    case BINDING:
+                    case STARTING:
+                    case STOPPING:
+                    case UNBINDING:
+                        startAction.setEnabled(false);
+                        stopAction.setEnabled(false);
+                        break;
+                    case ACTIVE:
+                        startAction.setEnabled(false);
+                        stopAction.setEnabled(true);
+                        break;
+                    }
+                } else {
+                    startAction.setEnabled(false);
+                    stopAction.setEnabled(false);
+                }
+            }
         }
 
         @Override

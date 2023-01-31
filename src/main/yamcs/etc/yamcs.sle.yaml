@@ -18,6 +18,16 @@ services:
       backFiller:
         enabled: true
         warmupTime: 60
+  - class: org.yamcs.simulator.SimulatorCommander
+    args:
+      frame: #send TM UDP frames
+        tcPort: 5010
+        tmPort: 1235
+        tmHost: "localhost"
+        type: AOS # AOS, TM or USLP
+        tmFrameLength: 1115
+        tmFrameFreq: 10 # how many frames to send per second. If the simulator does not produce so many frames, it will send idle frames
+
 
 #name of the class that is used for the TM index. If not specified, org.yamcs.archive.GenericCccsdsTmIndex is used
 #tmIndexer: 
@@ -51,7 +61,7 @@ dataLinks:
     frameLength: 1115
        
     #2 bytes of reed-solomon (10,6) in the header of all frames
-    frameHeaderErrorControlPresent: false 
+    frameHeaderErrorControlPresent: true
        
     insertZoneLength: 0
        
@@ -76,6 +86,12 @@ dataLinks:
             errorDetection: #last two bytes are used for the error detection
               type: "CRC-16-CCIIT" 
           stream: "tm2_realtime"
+        - vcId: 2
+          ocfPresent: true
+          service: "PACKET"
+          maxPacketLength: 2048
+          packetPreprocessorClassName: org.yamcs.tctm.IssPacketPreprocessor
+          stream: "tm_dump"
         #vcId 63 is reserved for idle data and it does not have to be defined
 
   - name: SLE_OUT

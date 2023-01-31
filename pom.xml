@@ -41,10 +41,15 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<yamcsVersion>5.7.6</yamcsVersion>
+		<yamcsVersion>5.7.10-SNAPSHOT</yamcsVersion>
 	</properties>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.yamcs</groupId>
+			<artifactId>simulator</artifactId>
+			<version>${yamcsVersion}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.yamcs</groupId>
 			<artifactId>jsle</artifactId>
