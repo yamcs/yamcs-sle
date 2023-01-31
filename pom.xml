@@ -41,7 +41,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<yamcsVersion>5.7.6</yamcsVersion>
+		<yamcsVersion>5.7.9</yamcsVersion>
 	</properties>
 
 	<dependencies>
@@ -82,7 +82,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.8.1</version>
+				<version>3.10.1</version>
 				<configuration>
 					<release>11</release>
 				</configuration>
@@ -90,7 +90,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
-				<version>3.1.2</version>
+				<version>3.3.0</version>
 				<configuration>
 					<archive>
 						<manifestEntries>
@@ -102,7 +102,7 @@
 			<plugin>
 				<groupId>org.yamcs</groupId>
 				<artifactId>yamcs-maven-plugin</artifactId>
-				<version>1.2.5</version>
+				<version>1.2.9</version>
 				<executions>
 					<execution>
 						<goals>
@@ -136,7 +136,7 @@
 					</execution>
 				</executions>
 				<configuration>
-					<protocArtifact>com.google.protobuf:protoc:3.7.1:exe:${os.detected.classifier}</protocArtifact>
+					<protocArtifact>com.google.protobuf:protoc:3.19.6:exe:${os.detected.classifier}</protocArtifact>
 					<writeDescriptorSet>true</writeDescriptorSet>
 					<checkStaleness>true</checkStaleness>
 					<descriptorSetFileName>${project.artifactId}.protobin</descriptorSetFileName>
@@ -148,7 +148,7 @@
 							<id>yamcs</id>
 							<groupId>org.yamcs</groupId>
 							<artifactId>yamcs-protoc-plugin</artifactId>
-							<version>5.2.3</version>
+							<version>5.3.0</version>
 							<mainClass>org.yamcs.protoc.ServiceGenerator</mainClass>
 						</protocPlugin>
 					</protocPlugins>
@@ -170,32 +170,13 @@
 
 	<profiles>
 		<profile>
-			<id>java8-compatibility</id>
-			<activation>
-				<jdk>[9,)</jdk>
-			</activation>
-			<build>
-				<pluginManagement>
-					<plugins>
-						<plugin>
-							<groupId>org.apache.maven.plugins</groupId>
-							<artifactId>maven-compiler-plugin</artifactId>
-							<configuration>
-								<release>8</release>
-							</configuration>
-						</plugin>
-					</plugins>
-				</pluginManagement>
-			</build>
-		</profile>
-		<profile>
 			<id>yamcs-release</id>
 			<build>
 				<plugins>
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-source-plugin</artifactId>
-						<version>2.2.1</version>
+						<version>3.2.1</version>
 						<executions>
 							<execution>
 								<id>attach-sources</id>
@@ -209,7 +190,7 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-gpg-plugin</artifactId>
-						<version>1.6</version>
+						<version>3.0.1</version>
 						<executions>
 							<execution>
 								<id>sign-artifacts</id>
