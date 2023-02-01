@@ -18,16 +18,6 @@ services:
       backFiller:
         enabled: true
         warmupTime: 60
-  - class: org.yamcs.simulator.SimulatorCommander
-    args:
-      frame: #send TM UDP frames
-        tcPort: 5010
-        tmPort: 1235
-        tmHost: "localhost"
-        type: AOS # AOS, TM or USLP
-        tmFrameLength: 1115
-        tmFrameFreq: 10 # how many frames to send per second. If the simulator does not produce so many frames, it will send idle frames
-
 
 #name of the class that is used for the TM index. If not specified, org.yamcs.archive.GenericCccsdsTmIndex is used
 #tmIndexer: 

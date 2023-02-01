@@ -47,13 +47,8 @@
 	<dependencies>
 		<dependency>
 			<groupId>org.yamcs</groupId>
-			<artifactId>simulator</artifactId>
-			<version>${yamcsVersion}</version>
-		</dependency>
-		<dependency>
-			<groupId>org.yamcs</groupId>
 			<artifactId>jsle</artifactId>
-			<version>0.17-SNAPSHOT</version>
+			<version>1.0.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.yamcs</groupId>
