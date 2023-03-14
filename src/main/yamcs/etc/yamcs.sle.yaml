@@ -51,7 +51,7 @@ dataLinks:
     frameLength: 1115
        
     #2 bytes of reed-solomon (10,6) in the header of all frames
-    frameHeaderErrorControlPresent: false 
+    frameHeaderErrorControlPresent: true
        
     insertZoneLength: 0
        
@@ -76,6 +76,12 @@ dataLinks:
             errorDetection: #last two bytes are used for the error detection
               type: "CRC-16-CCIIT" 
           stream: "tm2_realtime"
+        - vcId: 2
+          ocfPresent: true
+          service: "PACKET"
+          maxPacketLength: 2048
+          packetPreprocessorClassName: org.yamcs.tctm.IssPacketPreprocessor
+          stream: "tm_dump"
         #vcId 63 is reserved for idle data and it does not have to be defined
 
   - name: SLE_OUT

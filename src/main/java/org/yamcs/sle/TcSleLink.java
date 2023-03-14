@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import com.google.gson.JsonObject;
 import org.yamcs.YConfiguration;
 import org.yamcs.cmdhistory.CommandHistoryPublisher.AckStatus;
 import org.yamcs.commanding.PreparedCommand;
@@ -23,6 +24,8 @@ import org.yamcs.jsle.SleException;
 import org.yamcs.jsle.SleParameter;
 import org.yamcs.jsle.user.CltuServiceUserHandler;
 import org.yamcs.jsle.user.CltuSleMonitor;
+import org.yamcs.tctm.Link;
+import org.yamcs.tctm.LinkAction;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
 
 import org.yamcs.tctm.ccsds.TcTransferFrame;
@@ -81,6 +84,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     org.yamcs.jsle.State sleState = org.yamcs.jsle.State.UNBOUND;
 
+    org.yamcs.jsle.State requestedState = org.yamcs.jsle.State.UNBOUND;
+
     private SystemParameter sp_sleState, sp_cltuStatus, sp_numPendingFrames;
     final static AggregateMemberNames cltuStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
             "uplinkStatus", "numCltuReceived", "numCltuProcessed", "numCltuRadiated", "cltuBufferAvailable" });
@@ -88,11 +93,36 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     private volatile ParameterValue cltuStatus;
     private Thread thread;
 
+    boolean startSleOnEnable = true;
+
+
+    private LinkAction startAction = new LinkAction("start", "Start SLE") {
+        @Override
+        public JsonObject execute(Link link, JsonObject jsonObject) {
+            if(!isEffectivelyDisabled()) {
+                if (requestedState == org.yamcs.jsle.State.UNBOUND) {
+                    connectAndBind(true);
+                } else {
+                    sleStart();
+                }
+            }
+            return null;
+        }
+    };
+    private LinkAction stopAction = new LinkAction("stop", "Stop SLE") {
+        @Override
+        public JsonObject execute(Link link, JsonObject jsonObject) {
+            sleStop();
+            return null;
+        }
+    };
+
     public void init(String yamcsInstance, String name, YConfiguration config) {
         super.init(yamcsInstance, name, config);
 
         this.maxPendingFrames = config.getInt("maxPendingFrames", 20);
         this.waitForUplinkMsec = config.getInt("waitForUplinkMsec", 5000);
+        this.startSleOnEnable = config.getBoolean("startSleOnEnable", true);
 
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
@@ -101,10 +131,12 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         sleMonitor = new MyMonitor();
     }
 
-    private synchronized void connect() {
+    private synchronized void connectAndBind(boolean startSle) {
         if (!isRunningAndEnabled()) {
             return;
         }
+        requestedState = org.yamcs.jsle.State.READY;
+
         eventProducer.sendInfo("Connecting to SLE FCLTU service " + sconf.host + ":" + sconf.port + " as user " +
                 sconf.auth.getMyUsername());
         csuh = new CltuServiceUserHandler(sconf.auth, sconf.attr);
@@ -132,10 +164,10 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 csuh = null;
                 if (sconf.reconnectionIntervalSec >= 0) {
-                    workerGroup.schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
+                    workerGroup.schedule(() -> connectAndBind(startSle), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
                 }
             } else {
-                sleBind();
+                sleBind(startSle);
             }
         });
     }
@@ -208,19 +240,26 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         }
     }
 
-    private void sleBind() {
+    private void sleBind(boolean startSle) {
+        requestedState = org.yamcs.jsle.State.READY;
+
         csuh.bind().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to bind: " + t.getMessage());
                 return null;
             }
-            log.debug("BIND successfull, starting the service");
-            sleStart();
+            log.debug("BIND successful");
+            if (startSle) {
+                sleStart();
+            }
             return null;
         });
     }
 
     private void sleStart() {
+        requestedState = org.yamcs.jsle.State.ACTIVE;
+        log.debug("Starting SLE service");
+
         csuh.start().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to start: " + t);
@@ -228,6 +267,20 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             }
             log.debug("Successfully started the service");
             csuh.schedulePeriodicStatusReport(10);
+            return null;
+        });
+    }
+
+    private void sleStop() {
+        requestedState = org.yamcs.jsle.State.READY;
+        log.debug("Stopping SLE service");
+
+        csuh.stop().handle((v, t) -> {
+            if (t != null) {
+                eventProducer.sendWarning("Failed to stop: " + t);
+                return null;
+            }
+            log.debug("Successfully stopped the service");
             return null;
         });
     }
@@ -292,6 +345,10 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     @Override
     protected void doDisable() {
+        requestedState = org.yamcs.jsle.State.UNBOUND;
+        startAction.setEnabled(false);
+        stopAction.setEnabled(false);
+
         if (thread != null) {
             thread.interrupt();
         }
@@ -304,7 +361,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     @Override
     protected void doEnable() {
-        connect();
+        connectAndBind(startSleOnEnable);
         thread = new Thread(this);
         thread.start();
         eventProducer.sendInfo("SLE link enabled");
@@ -316,6 +373,12 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             doEnable();
         }
         notifyStarted();
+
+        addAction(startAction);
+        addAction(stopAction);
+
+        startAction.setEnabled(false);
+        stopAction.setEnabled(false);
     }
 
     @Override
@@ -325,16 +388,18 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         notifyStopped();
     }
 
+    /**
+     * Verifies that the requested state is the same as the current state
+     * @return Status.OK or Status.UNAVAIL
+     */
     @Override
     protected Status connectionStatus() {
-        CltuServiceUserHandler _csuh = csuh;
+        return sleState != org.yamcs.jsle.State.UNBOUND && sleState == requestedState ? Status.OK : Status.UNAVAIL;
+    }
 
-        if (_csuh != null && _csuh.isConnected() && sleState == org.yamcs.jsle.State.ACTIVE
-                && prodStatus == CltuProductionStatus.operational) {
-            return Status.OK;
-        } else {
-            return Status.UNAVAIL;
-        }
+    @Override
+    public Map<String, Object> getExtraInfo() {
+        return Map.of("SLE state", sleState);
     }
 
     class MyMonitor implements CltuSleMonitor {
@@ -358,7 +423,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             }
 
             if (isRunningAndEnabled() && sconf.reconnectionIntervalSec >= 0) {
-                getEventLoop().schedule(() -> connect(), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
+                getEventLoop().schedule(() -> connectAndBind(requestedState == org.yamcs.jsle.State.ACTIVE), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
             }
         }
 
@@ -366,6 +431,31 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         public void stateChanged(org.yamcs.jsle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
+            if (stopAction != null && startAction != null) {
+                if (!isEffectivelyDisabled()) {
+                    switch (sleState) {
+                    case UNBOUND:
+                    case READY:
+                        startAction.setEnabled(true);
+                        stopAction.setEnabled(false);
+                        break;
+                    case BINDING:
+                    case STARTING:
+                    case STOPPING:
+                    case UNBINDING:
+                        startAction.setEnabled(false);
+                        stopAction.setEnabled(false);
+                        break;
+                    case ACTIVE:
+                        startAction.setEnabled(false);
+                        stopAction.setEnabled(true);
+                        break;
+                    }
+                } else {
+                    startAction.setEnabled(false);
+                    stopAction.setEnabled(false);
+                }
+            }
         }
 
         @Override
@@ -448,5 +538,16 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             throw new SleException("link not connected");
         }
         return _csuh.getParameter(paraName.id());
+    }
+
+    @Override
+    public boolean isCommandingAvailable() {
+        if (isDisabled()) {
+            return false;
+        } else if (getParent() != null) {
+            return !getParent().isEffectivelyDisabled();
+        } else {
+            return requestedState == org.yamcs.jsle.State.ACTIVE;
+        }
     }
 }

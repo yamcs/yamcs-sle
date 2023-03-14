@@ -16,8 +16,9 @@ Specify SLE properties in ``etc/sle.yaml``, and add a link entry to ``etc/yamcs.
           class: org.yamcs.sle.TmSleLink
           sleProvider: GS1
           deliveryMode: timely
+          startSleOnEnable: false
           # other options
-          
+
 
 
 Options
@@ -29,10 +30,11 @@ sleProvider (string)
 service (string)
      One of: ``RAF`` or ``RCF``. Default RAF.
      
-   
-     
 deliveryMode (string)
     **Required.** One of: ``complete`` or ``timely``.
+
+startSleOnEnable (boolean)
+    Whether the SLE session should automatically be STARTed when the link is enabled. If ``false``, enabling the link will only BIND it. Default: ``true``
 
 .. include:: _includes/tm-options.rst
 .. include:: _includes/reconnect-options.rst

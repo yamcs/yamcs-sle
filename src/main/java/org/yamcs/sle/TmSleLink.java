@@ -104,9 +104,15 @@ public class TmSleLink extends AbstractTmSleLink {
     @Override
     protected void doStart() {
         if (!isDisabled()) {
-            connect();
+            connectAndBind(startSleOnEnable);
         }
         notifyStarted();
+
+        addAction(startAction);
+        addAction(stopAction);
+
+        startAction.setEnabled(false);
+        stopAction.setEnabled(false);
     }
 
     @Override
@@ -119,6 +125,8 @@ public class TmSleLink extends AbstractTmSleLink {
     }
 
     protected void sleStart() {
+        requestedState = org.yamcs.jsle.State.ACTIVE;
+
         CompletableFuture<Void> cf;
         if (gvcid == null) {
             cf = ((RafServiceUserHandler) rsuh).start();
@@ -138,6 +146,9 @@ public class TmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doDisable() {
+        requestedState = org.yamcs.jsle.State.UNBOUND;
+        startAction.setEnabled(false);
+        stopAction.setEnabled(false);
         if (rsuh != null) {
             Utils.sleStop(rsuh, sconf, eventProducer);
             rsuh = null;
@@ -147,7 +158,7 @@ public class TmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doEnable() throws Exception {
-        connect();
+        connectAndBind(startSleOnEnable);
         eventProducer.sendInfo("SLE link enabled");
     }
 

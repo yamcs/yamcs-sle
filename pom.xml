@@ -41,7 +41,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<yamcsVersion>5.7.9</yamcsVersion>
+		<yamcsVersion>5.7.10-SNAPSHOT</yamcsVersion>
 	</properties>
 
 	<dependencies>

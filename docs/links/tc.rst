@@ -15,6 +15,7 @@ Specify SLE properties in ``etc/sle.yaml``, and add a link entry to ``etc/yamcs.
         - name: SLE_OUT
           class: org.yamcs.sle.TcSleLink
           sleProvider: GS1
+          startSleOnEnable: false
           # other options
 
 Queing behaviour
@@ -46,6 +47,9 @@ waitForUplinkMsec (integer)
 
 maxPendingFrames:
     Maximum number of pending frames in the SLE provider (waiting or being uplinked). If this number is reached we start rejecting new frames but only after waiting waitForUplinkMsec before each frame. Default: ``20``.
+
+startSleOnEnable (boolean)
+    Whether the SLE session should automatically be STARTed when the link is enabled. If ``false``, enabling the link will only BIND it. Default: ``true``
 
 .. include:: _includes/reconnect-options.rst
 
