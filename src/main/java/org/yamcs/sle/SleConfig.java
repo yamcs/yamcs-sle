@@ -1,5 +1,7 @@
 package org.yamcs.sle;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.yamcs.ConfigurationException;
 import org.yamcs.YConfiguration;
 import org.yamcs.jsle.AuthLevel;
@@ -10,8 +12,7 @@ import org.yamcs.jsle.user.SleAttributes;
 import org.yamcs.utils.StringConverter;
 
 public class SleConfig {
-    String host;
-    int port;
+    List<Endpoint> endpoints = new ArrayList<>();
     Isp1Authentication auth;
     int versionNumber;
     AuthLevel authLevel;
@@ -28,6 +29,13 @@ public class SleConfig {
     // how long to wait for a graceful shutdown
     long maxShutdownDelayMillis;
 
+    // How long to wait for a connection. Must be int to match
+    // the Netty option type.
+    int connectionTimeoutMillis;
+
+    // How often to try additional endpoints.
+    long roundRobinIntervalMillis;
+
     // how soon should reconnect in case the connection to the SLE provider is lost
     // if negative, do not reconnect
     int reconnectionIntervalSec;
@@ -36,8 +44,14 @@ public class SleConfig {
         // tconfig is everything service specific (i.e. under the cltu: in the config file)
         YConfiguration tconfig = config.getConfig(type);
 
-        host = tconfig.getString("host");
-        port = tconfig.getInt("port");
+        if (tconfig.containsKey("host")) {
+            endpoints.add(new Endpoint(tconfig.getString("host"), tconfig.getInt("port")));
+        } else {
+            for (YConfiguration endpointConfig : tconfig.getConfigList("endpoints")) {
+                endpoints.add(new Endpoint(endpointConfig.getString("host"), endpointConfig.getInt("port")));
+            }
+        }
+
         String responderPortId;
 
         responderPortId = tconfig.getString("responderPortId", config.getString("responderPortId"));
@@ -47,6 +61,10 @@ public class SleConfig {
         this.maxShutdownDelayMillis = 1000 * tconfig.getLong("maxShutdownDelayMillis",
                 config.getLong("maxShutdownDelaySec", 5));
 
+        this.connectionTimeoutMillis = tconfig.getInt("connectionTimeoutMillis",
+                config.getInt("connectionTimeoutMillis", 5000));
+        this.roundRobinIntervalMillis = tconfig.getLong("roundRobinIntervalMillis",
+                config.getLong("roundRobinIntervalMillis", 100));
         this.reconnectionIntervalSec = tconfig.getInt("reconnectionIntervalSec",
                 config.getInt("reconnectionIntervalSec", 30));
 
@@ -61,7 +79,7 @@ public class SleConfig {
         long authDelay = 1000l * tconfig.getInt("authenticationDelay", config.getInt("authenticationDelay",
                 Isp1Authentication.DEFAULT_MAX_DELTA_RCV_TIME_SEC));
         auth.setMaxDeltaRcvTime(authDelay);
-        
+
         versionNumber = config.getInt("versionNumber", 5);
 
         String serviceInstance = config.getSubString(type, "serviceInstance");
@@ -80,6 +98,14 @@ public class SleConfig {
         tmlMaxLength = config.getInt("  tmlMaxLength", tmlMaxLength);
     }
 
+    public int getEndpointCount() {
+        return endpoints.size();
+    }
+
+    public Endpoint getEndpoint(int index) {
+        return endpoints.get(index);
+    }
+
     static Isp1Authentication getAuthentication(YConfiguration c) {
         String myUsername = c.getString("myUsername");
         String peerUsername = c.getString("peerUsername");
@@ -93,5 +119,25 @@ public class SleConfig {
         Isp1Authentication auth = new Isp1Authentication(myUsername, myPass, peerUsername, peerPass, hashAlgo);
 
         return auth;
+    }
+
+    public static class Endpoint {
+
+        private String host;
+        private int port;
+
+        public Endpoint(String host, int port) {
+            this.host = host;
+            this.port = port;
+        }
+
+        public String getHost() {
+            return host;
+        }
+
+        public int getPort() {
+            return port;
+        }
+
     }
 }

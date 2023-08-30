@@ -11,10 +11,6 @@ import com.google.gson.JsonObject;
 import org.yamcs.YConfiguration;
 import org.yamcs.cmdhistory.CommandHistoryPublisher.AckStatus;
 import org.yamcs.commanding.PreparedCommand;
-import org.yamcs.parameter.AggregateValue;
-import org.yamcs.parameter.ParameterValue;
-import org.yamcs.parameter.SystemParametersService;
-import org.yamcs.protobuf.Yamcs.Value.Type;
 import org.yamcs.jsle.CcsdsTime;
 import org.yamcs.jsle.Constants.CltuProductionStatus;
 import org.yamcs.jsle.Constants.UplinkStatus;
@@ -24,12 +20,16 @@ import org.yamcs.jsle.SleException;
 import org.yamcs.jsle.SleParameter;
 import org.yamcs.jsle.user.CltuServiceUserHandler;
 import org.yamcs.jsle.user.CltuSleMonitor;
+import org.yamcs.parameter.AggregateValue;
+import org.yamcs.parameter.ParameterValue;
+import org.yamcs.parameter.SystemParametersService;
+import org.yamcs.protobuf.Yamcs.Value.Type;
+import org.yamcs.sle.SleConfig.Endpoint;
 import org.yamcs.tctm.Link;
 import org.yamcs.tctm.LinkAction;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
-
-import org.yamcs.tctm.ccsds.TcTransferFrame;
 import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorDetection;
+import org.yamcs.tctm.ccsds.TcTransferFrame;
 import org.yamcs.utils.StringConverter;
 import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
@@ -53,7 +53,7 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
 /**
  * SendsTC frames embedded in CLTU (CCSDS 231.0-B-3) via FCLTU SLE service.
- * 
+ *
  * @author nm
  *
  */
@@ -61,6 +61,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     FrameErrorDetection errorCorrection;
 
     SleConfig sconf;
+    int endpointIndex = -1;
 
     CltuServiceUserHandler csuh;
     CltuSleMonitor sleMonitor;
@@ -117,6 +118,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         }
     };
 
+    @Override
     public void init(String yamcsInstance, String name, YConfiguration config) {
         super.init(yamcsInstance, name, config);
 
@@ -137,7 +139,11 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         }
         requestedState = org.yamcs.jsle.State.READY;
 
-        eventProducer.sendInfo("Connecting to SLE FCLTU service " + sconf.host + ":" + sconf.port + " as user " +
+        if (endpointIndex < 0) {
+            endpointIndex = 0;
+        }
+        Endpoint endpoint = sconf.getEndpoint(endpointIndex);
+        eventProducer.sendInfo("Connecting to SLE FCLTU service " + endpoint.getHost() + ":" + endpoint.getPort() + " as user " +
                 sconf.auth.getMyUsername());
         csuh = new CltuServiceUserHandler(sconf.auth, sconf.attr);
         csuh.setVersionNumber(sconf.versionNumber);
@@ -151,6 +157,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         b.group(workerGroup);
         b.channel(NioSocketChannel.class);
         b.option(ChannelOption.SO_KEEPALIVE, true);
+        b.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, sconf.connectionTimeoutMillis);
         b.handler(new ChannelInitializer<SocketChannel>() {
             @Override
             public void initChannel(SocketChannel ch) throws Exception {
@@ -159,11 +166,17 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 ch.pipeline().addLast(csuh);
             }
         });
-        b.connect(sconf.host, sconf.port).addListener(f -> {
+        b.connect(endpoint.getHost(), endpoint.getPort()).addListener(f -> {
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 csuh = null;
-                if (sconf.reconnectionIntervalSec >= 0) {
+                ++endpointIndex;
+                if (endpointIndex >= sconf.getEndpointCount()) {
+                    endpointIndex = -1;
+                }
+                if (endpointIndex >= 0 && sconf.roundRobinIntervalMillis >= 0) {
+                    workerGroup.schedule(() -> connectAndBind(startSle), sconf.roundRobinIntervalMillis, TimeUnit.MILLISECONDS);
+                } else if (sconf.reconnectionIntervalSec >= 0) {
                     workerGroup.schedule(() -> connectAndBind(startSle), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
                 }
             } else {
@@ -361,6 +374,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     @Override
     protected void doEnable() {
+        endpointIndex = -1;
         connectAndBind(startSleOnEnable);
         thread = new Thread(this);
         thread.start();
