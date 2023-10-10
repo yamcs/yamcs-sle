@@ -62,9 +62,9 @@
 			<optional>true</optional>
 		</dependency>
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13.1</version>
+			<groupId>org.yamcs</groupId>
+			<artifactId>tests</artifactId>
+			<version>${yamcsVersion}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -241,6 +241,7 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-javadoc-plugin</artifactId>
+						<version>3.6.0</version>
 						<executions>
 							<execution>
 								<id>attach-javadocs</id>
