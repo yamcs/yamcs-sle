@@ -81,8 +81,33 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<version>3.4.2</version>
+				<executions>
+					<execution>
+						<id>make-bundle</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<descriptors>
+						<descriptor>src/main/assembly/bundle.descriptor.xml</descriptor>
+					</descriptors>
+					<tarLongFileMode>posix</tarLongFileMode>
+					<archiverConfig>
+						<directoryMode>0755</directoryMode>
+						<defaultDirectoryMode>0755</defaultDirectoryMode>
+						<fileMode>0644</fileMode>
+					</archiverConfig>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.10.1</version>
+				<version>3.11.0</version>
 				<configuration>
 					<release>11</release>
 				</configuration>
@@ -111,10 +136,11 @@
 					</execution>
 				</executions>
 			</plugin>
-			<plugin> <!-- Sets the 'os.detected.classifier' maven property (used by protobuf-maven-plugin) -->
+			<plugin> <!-- Sets the 'os.detected.classifier' maven property (used by
+				protobuf-maven-plugin) -->
 				<groupId>kr.motd.maven</groupId>
 				<artifactId>os-maven-plugin</artifactId>
-				<version>1.6.2</version>
+				<version>1.7.1</version>
 				<executions>
 					<execution>
 						<phase>initialize</phase>
@@ -148,7 +174,7 @@
 							<id>yamcs</id>
 							<groupId>org.yamcs</groupId>
 							<artifactId>yamcs-protoc-plugin</artifactId>
-							<version>5.3.0</version>
+							<version>5.3.1</version>
 							<mainClass>org.yamcs.protoc.ServiceGenerator</mainClass>
 						</protocPlugin>
 					</protocPlugins>
@@ -223,6 +249,21 @@
 								</goals>
 							</execution>
 						</executions>
+						<configuration>
+							<release>11</release>
+							<author>false</author>
+							<breakiterator>true</breakiterator>
+							<links>
+								<link>https://docs.yamcs.org/javadoc/yamcs/latest/</link>
+							</links>
+							<additionalOptions>
+								<additionalOption>-Xdoclint:none</additionalOption>
+								<additionalOption>-Xdoclint:html</additionalOption>
+								<additionalOption>-Xdoclint:reference</additionalOption>
+								<!-- the 'syntax' group is too strict with @param and @throws -->
+								<!-- additionalOption>-Xdoclint:syntax</additionalOption-->
+							</additionalOptions>
+						</configuration>
 					</plugin>
 				</plugins>
 			</build>
