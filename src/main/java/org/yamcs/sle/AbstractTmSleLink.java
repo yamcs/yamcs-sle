@@ -250,6 +250,11 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     }
 
     @Override
+    public String getDetailedStatus() {
+        return "SLE " + sleState;
+    }
+
+    @Override
     public Map<String, Object> getExtraInfo() {
         return Map.of("SLE state", sleState);
     }

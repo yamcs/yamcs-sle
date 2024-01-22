@@ -416,6 +416,11 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         return Map.of("SLE state", sleState);
     }
 
+    @Override
+    public String getDetailedStatus() {
+        return "SLE " + sleState;
+    }
+
     class MyMonitor implements CltuSleMonitor {
         @Override
         public void connected() {
