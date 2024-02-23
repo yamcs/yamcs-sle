@@ -116,6 +116,9 @@ host (string)
 
 port (integer)
     The port number to connect to.
+    
+endpoints (list) - new since version 1.6.0
+    Can be used to specify a list of (host, port) to be tried successively in a round-robit fashion. If this is specified, the host/port defined above have to be ommited.
         
 serviceInstance (string)
     Used (after transformation to binary form) as ``service-instance-identifier`` in the SLE BIND call to identify the service requested to the provider. It is a series of ``sia=value`` separated by dots where sia is a service identifier attribute.

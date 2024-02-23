@@ -29,8 +29,11 @@ Providers:
     peerPassword: AB0102030405060708090a0b0c0d0e0f
 
     cltu:
-      host: localhost 
-      port: 25711
+      endpoints: #two endpoints - they are the same for test purposes
+        - host: localhost 
+          port: 25711
+        - host: localhost 
+          port: 25711
       responderPortId: "port_1" #this overwrites the responderPortId set above
       serviceInstance: "sagr=SAGR.spack=SPACK.fsl-fg=FSL-FG.cltu=cltu1"
 
