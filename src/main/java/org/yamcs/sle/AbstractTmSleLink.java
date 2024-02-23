@@ -31,7 +31,7 @@ import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersService;
 import org.yamcs.protobuf.Yamcs.Value.Type;
-import org.yamcs.sle.SleConfig.Endpoint;
+import org.yamcs.sle.EndpointHandler.Endpoint;
 import org.yamcs.tctm.Link;
 import org.yamcs.tctm.LinkAction;
 import org.yamcs.tctm.TcTmException;
@@ -58,10 +58,11 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
     RacfServiceUserHandler rsuh;
+    EndpointHandler endpointHandler;
 
     RacfSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
-    int endpointIndex = -1;
+
     DeliveryMode deliveryMode;
 
     String service;
@@ -103,7 +104,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     };
 
     /**
-     * Creates a new UDP Frame Data Link
+     * parses and validates configuration
      *
      * @param deliveryMode
      *
@@ -114,8 +115,6 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             throws ConfigurationException {
         super.init(instance, name, config);
         this.deliveryMode = deliveryMode;
-
-
 
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
@@ -150,6 +149,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
         }
         this.sconf = new SleConfig(slec, type);
+        this.endpointHandler = new EndpointHandler(sconf);
 
     }
 
@@ -159,12 +159,11 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
         requestedState = org.yamcs.jsle.State.READY;
 
-        if (endpointIndex < 0) {
-            endpointIndex = 0;
-        }
-        Endpoint endpoint = sconf.getEndpoint(endpointIndex);
-        eventProducer.sendInfo("Connecting to SLE " + service + " service " + endpoint.getHost() + ":" + endpoint.getPort()
-                + " as user " + sconf.auth.getMyUsername());
+        Endpoint endpoint = endpointHandler.next();
+
+        eventProducer
+                .sendInfo("Connecting to SLE " + service + " service " + endpoint.getHost() + ":" + endpoint.getPort()
+                        + " as user " + sconf.auth.getMyUsername());
         if (gvcid == null) {
             rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
             ((RafServiceUserHandler) rsuh).setRequestedFrameQuality(frameQuality);
@@ -190,18 +189,15 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
                 ch.pipeline().addLast(rsuh);
             }
         });
+
         b.connect(endpoint.getHost(), endpoint.getPort()).addListener(f -> {
             if (!f.isSuccess()) {
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
                 rsuh = null;
-                ++endpointIndex;
-                if (endpointIndex >= sconf.getEndpointCount()) {
-                    endpointIndex = -1;
-                }
-                if (endpointIndex >= 0 && sconf.roundRobinIntervalMillis >= 0) {
-                    workerGroup.schedule(() -> connectAndBind(startSle), sconf.roundRobinIntervalMillis, TimeUnit.MILLISECONDS);
-                } else if (sconf.reconnectionIntervalSec >= 0) {
-                    workerGroup.schedule(() -> connectAndBind(startSle), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
+                long nextAttempt = endpointHandler.nextConnectionAttemptMillis();
+
+                if (nextAttempt >= 0) {
+                    workerGroup.schedule(() -> connectAndBind(startSle), nextAttempt, TimeUnit.MILLISECONDS);
                 }
             } else {
                 sleBind(startSle);
@@ -242,6 +238,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
 
     /**
      * Verifies that the requested state is the same as the current state
+     * 
      * @return Status.OK or Status.UNAVAIL
      */
     @Override
@@ -366,14 +363,17 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         @Override
         public void disconnected() {
             eventProducer.sendInfo("SLE disconnected");
-            endpointIndex = -1;
+            endpointHandler.reset();
+
             if (rsuh != null) {
                 rsuh.shutdown();
                 rsuh = null;
             }
+            sleState = org.yamcs.jsle.State.UNBOUND;
 
             if (isRunningAndEnabled() && sconf.reconnectionIntervalSec >= 0) {
-                getEventLoop().schedule(() -> connectAndBind(requestedState == org.yamcs.jsle.State.ACTIVE), sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
+                getEventLoop().schedule(() -> connectAndBind(requestedState == org.yamcs.jsle.State.ACTIVE),
+                        sconf.reconnectionIntervalSec, TimeUnit.SECONDS);
             }
         }
 

@@ -9,6 +9,7 @@ import org.yamcs.jsle.Constants.UnbindReason;
 import org.yamcs.jsle.Isp1Authentication;
 import org.yamcs.jsle.Isp1Handler.HeartbeatSettings;
 import org.yamcs.jsle.user.SleAttributes;
+import org.yamcs.sle.EndpointHandler.Endpoint;
 import org.yamcs.utils.StringConverter;
 
 public class SleConfig {
@@ -45,6 +46,9 @@ public class SleConfig {
         YConfiguration tconfig = config.getConfig(type);
 
         if (tconfig.containsKey("host")) {
+            if (tconfig.containsKey("endpoints")) {
+                throw new ConfigurationException(tconfig, "Cannot specify both 'host' and 'endpoints'");
+            }
             endpoints.add(new Endpoint(tconfig.getString("host"), tconfig.getInt("port")));
         } else {
             for (YConfiguration endpointConfig : tconfig.getConfigList("endpoints")) {
@@ -98,13 +102,6 @@ public class SleConfig {
         tmlMaxLength = config.getInt("  tmlMaxLength", tmlMaxLength);
     }
 
-    public int getEndpointCount() {
-        return endpoints.size();
-    }
-
-    public Endpoint getEndpoint(int index) {
-        return endpoints.get(index);
-    }
 
     static Isp1Authentication getAuthentication(YConfiguration c) {
         String myUsername = c.getString("myUsername");
@@ -121,23 +118,7 @@ public class SleConfig {
         return auth;
     }
 
-    public static class Endpoint {
 
-        private String host;
-        private int port;
 
-        public Endpoint(String host, int port) {
-            this.host = host;
-            this.port = port;
-        }
 
-        public String getHost() {
-            return host;
-        }
-
-        public int getPort() {
-            return port;
-        }
-
-    }
 }
