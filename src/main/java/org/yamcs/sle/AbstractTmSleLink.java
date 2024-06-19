@@ -265,6 +265,7 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
 
         int length = data.length;
+        dataIn(1, length);
 
         if (log.isTraceEnabled()) {
             log.trace("Received frame length: {}, data: {}", data.length, StringConverter.arrayToHexString(data));

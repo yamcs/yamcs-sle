@@ -208,6 +208,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                     log.trace("Sending CLTU of size {}: {}", data.length, StringConverter.arrayToHexString(data));
                 }
                 int id = csuh.transferCltu(data);
+                dataOut(1, data.length);
                 pendingFrames.put(id, tf);
                 if (tf.getCommands() != null) {
                     for (PreparedCommand pc : tf.getCommands()) {
