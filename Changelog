@@ -1,5 +1,8 @@
-Version 1.6.0 released 
-- allow specifying a list of endpoints to connect to
+Version 1.6.0 released 9-Jul-2024
+- allow specifying a list of endpoints to connect to instead of just one.
+- added support for private annotations: if the privateAnnotationParameter option is specified and the data received via the SLE has private annotation data, 
+  the data will be provided as a binary parameter in Yamcs. The content of the data is provider specific (it can be transformed to other parameters by using some custom algorithms). The parameter has to exist in the MDB.
+  the ppStream also has to be specified to configure the stream on which the parameter is placed.
 
 Version 1.5.0 released 14-Mar-2023
 - allow to separate BIND and START

@@ -3,7 +3,9 @@ package org.yamcs.sle;
 import java.util.concurrent.CompletableFuture;
 
 import org.yamcs.ConfigurationException;
+import org.yamcs.Spec;
 import org.yamcs.YConfiguration;
+import org.yamcs.Spec.OptionType;
 import org.yamcs.tctm.ccsds.UdpTmFrameLink;
 
 import org.yamcs.jsle.Constants.DeliveryMode;
@@ -54,9 +56,9 @@ import org.yamcs.jsle.user.RcfServiceUserHandler;
  * </tr>
  * <tr>
  * <td>rcfTfVersion</td>
- * <td>Specifies the requested frame version number (0=TM, 1=AOS, 12=USLP).
- * If this option is not used, the frame version number will be derived from the frameType. If specfied, no validation
- * is performed but sent as configured to the SLE provider.</td>
+ * <td>Specifies the requested frame version number (0=TM, 1=AOS, 12=USLP). If this option is not used, the frame
+ * version number will be derived from the frameType. If specfied, no validation is performed but sent as configured to
+ * the SLE provider.</td>
  * </tr>
  * <tr>
  * <tr>
@@ -77,13 +79,16 @@ import org.yamcs.jsle.user.RcfServiceUserHandler;
  * <tr>
  * 
  * </table>
- * 
- * 
- * @author nm
- *
  */
 public class TmSleLink extends AbstractTmSleLink {
     RacfSleMonitor sleMonitor = new MyMonitor();
+
+    @Override
+    public Spec getDefaultSpec() {
+        var spec = super.getDefaultSpec();
+        spec.addOption("deliveryMode", OptionType.STRING).withRequired(true).withChoices("timely", "complete");
+        return spec;
+    }
 
     public void init(String instance, String name, YConfiguration config) throws ConfigurationException {
         super.init(instance, name, config, getDeliveryMode(config));

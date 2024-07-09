@@ -56,7 +56,10 @@ dataLinks:
     insertZoneLength: 0
        
     #NONE, CRC16 or CRC32 (only for USLP)
-    errorDetection: CRC16 
+    errorDetection: CRC16
+    privateAnnotationParameter: "/SLE/private_annotation"
+    ppStream: pp_realtime
+    
     virtualChannels:
         - vcId: 0
           ocfPresent: true

@@ -41,3 +41,10 @@ startSleOnEnable (boolean)
 
 .. note::
     Other available link options are general frame processing parameters as specified at :yamcs-manual:`links/ccsds-frame-processing`.
+
+privateAnnotationParameter (string)
+   If specified, it is the name of a fully qualified binary parameter in the MDB. The parameter will be updated with the private annotation data received via SLE. 
+   The data is provided as binary content of the data is specific to each provider/mission.
+   The parameter must exist in the MDB, otherwise Yamcs will not start.
+   The parameter is timestamped with the Earth Reception Time received from the SLE provider.
+   

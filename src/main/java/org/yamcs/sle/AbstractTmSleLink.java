@@ -1,5 +1,6 @@
 package org.yamcs.sle;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -8,7 +9,10 @@ import java.util.concurrent.TimeUnit;
 import com.google.gson.JsonObject;
 
 import org.yamcs.ConfigurationException;
+import org.yamcs.Spec;
+import org.yamcs.Spec.OptionType;
 import org.yamcs.YConfiguration;
+import org.yamcs.YamcsServer;
 import org.yamcs.jsle.AntennaId;
 import org.yamcs.jsle.CcsdsTime;
 import org.yamcs.jsle.Constants.DeliveryMode;
@@ -34,6 +38,8 @@ import org.yamcs.protobuf.Yamcs.Value.Type;
 import org.yamcs.sle.EndpointHandler.Endpoint;
 import org.yamcs.tctm.Link;
 import org.yamcs.tctm.LinkAction;
+import org.yamcs.tctm.ParameterDataLink;
+import org.yamcs.tctm.ParameterSink;
 import org.yamcs.tctm.TcTmException;
 import org.yamcs.tctm.ccsds.AbstractTmFrameLink;
 import org.yamcs.time.Instant;
@@ -43,6 +49,7 @@ import org.yamcs.utils.ValueUtility;
 import org.yamcs.xtce.AggregateParameterType;
 import org.yamcs.xtce.EnumeratedParameterType;
 import org.yamcs.xtce.Member;
+import org.yamcs.xtce.Parameter;
 import org.yamcs.xtce.SystemParameter;
 import org.yamcs.xtce.util.AggregateMemberNames;
 
@@ -54,7 +61,13 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 
-public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements FrameConsumer, SleLink {
+/**
+ * Abstract class for the TM SLE links.
+ * <p>
+ * It implements the common functionality for Offline and Online links.
+ */
+public abstract class AbstractTmSleLink extends AbstractTmFrameLink
+        implements FrameConsumer, SleLink, ParameterDataLink {
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
     RacfServiceUserHandler rsuh;
@@ -72,6 +85,14 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
     org.yamcs.jsle.State requestedState = org.yamcs.jsle.State.UNBOUND;
 
     private volatile ParameterValue rafStatus;
+
+    // added in version 1.6.0:
+    // privateAnnotationParameter option can be configured to specify the name of a
+    // parameter that will contain the value of the private annotation property that is sent by the SLE provider
+    // together with each frame
+    protected ParameterSink parameterSink;
+    private Parameter privateAnnotationParameter;
+    int paramSeq = 0;
 
     private SystemParameter sp_sleState, sp_racfStatus;
     final static AggregateMemberNames rafStatusMembers = AggregateMemberNames.get(new String[] { "productionStatus",
@@ -102,6 +123,23 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             return null;
         }
     };
+
+    @Override
+    public Spec getDefaultSpec() {
+        var spec = super.getDefaultSpec();
+        spec.addOption("sleProvider", OptionType.STRING).withRequired(true);
+        spec.addOption("service", OptionType.STRING).withChoices("RAF", "RCF").withDefault("RAF");
+        spec.addOption("rcfTfVersion", OptionType.INTEGER);
+        spec.addOption("rcfSpacecraftId", OptionType.INTEGER);
+        spec.addOption("rcfVcId", OptionType.INTEGER);
+        spec.addOption("frameQuality", OptionType.STRING).withChoices(RequestedFrameQuality.class);
+        spec.addOption("privateAnnotationParameter", OptionType.STRING).withDefault(false).withDescription(
+                "If set, provide the frame annotation received from SLE as a parameter witht the given fqn");
+        spec.addOption("startSleOnEnable", OptionType.BOOLEAN).withDefault(true)
+                .withDescription("Whether the SLE session should automatically be STARTed when the link is enabled."
+                        + " If false, enabling the link will only BIND it (and it has to be started using the provided action)");
+        return spec;
+    }
 
     /**
      * parses and validates configuration
@@ -150,6 +188,15 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         }
         this.sconf = new SleConfig(slec, type);
         this.endpointHandler = new EndpointHandler(sconf);
+
+        String pafqn = config.getString("privateAnnotationParameter", null);
+        if (pafqn != null) {
+            var mdb = YamcsServer.getServer().getInstance(yamcsInstance).getMdb();
+            privateAnnotationParameter = mdb.getParameter(pafqn);
+            if (privateAnnotationParameter == null) {
+                throw new ConfigurationException("Cannot find in the MDB the parameter with the name " + pafqn);
+            }
+        }
 
     }
 
@@ -268,26 +315,38 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
         dataIn(1, length);
 
         if (log.isTraceEnabled()) {
-            log.trace("Received frame length: {}, data: {}", data.length, StringConverter.arrayToHexString(data));
+            log.trace("Received frame length: {}, data: {}, privAnn: {}", data.length,
+                    StringConverter.arrayToHexString(data),
+                    privAnn == null ? "null" : StringConverter.arrayToHexString(privAnn));
         }
         try {
+            Instant ertime = toInstant(ert);
+
             if (length < frameHandler.getMinFrameSize()) {
                 eventProducer.sendWarning("Error processing frame: size " + length
                         + " shorter than minimum allowed " + frameHandler.getMinFrameSize());
+                invalidFrameCount.incrementAndGet();
             } else if (length > frameHandler.getMaxFrameSize()) {
                 eventProducer.sendWarning("Error processing frame: size " + length + " longer than maximum allowed "
                         + frameHandler.getMaxFrameSize());
+                invalidFrameCount.incrementAndGet();
             } else {
-                frameCount.incrementAndGet();
-                Instant ertime = toInstant(ert);
+                validFrameCount.incrementAndGet();
 
                 frameHandler.handleFrame(ertime, data, 0, length);
+            }
+
+            if (privAnn != null && privateAnnotationParameter != null) {
+                var pv = new ParameterValue(privateAnnotationParameter);
+                pv.setEngValue(ValueUtility.getBinaryValue(privAnn));
+                parameterSink.updateParameters(ertime.getMillis(), "SLE", paramSeq++, Arrays.asList(pv));
             }
         } catch (TcTmException e) {
             eventProducer.sendWarning("Error processing frame: " + e.toString());
         } catch (Exception e) {
             log.error("Error processing frame", e);
         }
+
     }
 
     @Override
@@ -347,6 +406,17 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink implements F
             throw new SleException("link not connected");
         }
         return _rsuh.getParameter(paraName.id());
+    }
+
+    @Override
+    public boolean isParameterDataLinkImplemented() {
+        return privateAnnotationParameter != null;
+    }
+
+    @Override
+    public void setParameterSink(ParameterSink parameterSink) {
+        System.out.println(" parameterSink: " + parameterSink);
+        this.parameterSink = parameterSink;
     }
 
     class MyMonitor implements RacfSleMonitor {
