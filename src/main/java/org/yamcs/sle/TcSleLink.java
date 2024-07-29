@@ -7,8 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import com.google.gson.JsonObject;
 import org.yamcs.YConfiguration;
+import org.yamcs.actions.ActionResult;
 import org.yamcs.cmdhistory.CommandHistoryPublisher.AckStatus;
 import org.yamcs.commanding.PreparedCommand;
 import org.yamcs.jsle.CcsdsTime;
@@ -37,6 +37,8 @@ import org.yamcs.xtce.AggregateParameterType;
 import org.yamcs.xtce.Member;
 import org.yamcs.xtce.SystemParameter;
 import org.yamcs.xtce.util.AggregateMemberNames;
+
+import com.google.gson.JsonObject;
 
 import ccsds.sle.transfer.service.cltu.outgoing.pdus.CltuAsyncNotifyInvocation;
 import ccsds.sle.transfer.service.cltu.outgoing.pdus.CltuStatusReportInvocation;
@@ -99,7 +101,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     private LinkAction startAction = new LinkAction("start", "Start SLE") {
         @Override
-        public JsonObject execute(Link link, JsonObject jsonObject) {
+        public void execute(Link link, JsonObject jsonObject, ActionResult result) {
             if (!isEffectivelyDisabled()) {
                 if (requestedState == org.yamcs.jsle.State.UNBOUND) {
                     connectAndBind(true);
@@ -107,14 +109,14 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                     sleStart();
                 }
             }
-            return null;
+            result.complete();
         }
     };
     private LinkAction stopAction = new LinkAction("stop", "Stop SLE") {
         @Override
-        public JsonObject execute(Link link, JsonObject jsonObject) {
+        public void execute(Link link, JsonObject jsonObject, ActionResult result) {
             sleStop();
-            return null;
+            result.complete();
         }
     };
 
