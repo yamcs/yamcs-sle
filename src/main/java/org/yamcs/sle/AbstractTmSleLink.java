@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.yamcs.ConfigurationException;
 import org.yamcs.Spec;
+import org.yamcs.StandardTupleDefinitions;
 import org.yamcs.Spec.OptionType;
 import org.yamcs.YConfiguration;
 import org.yamcs.YamcsServer;
@@ -30,6 +31,7 @@ import org.yamcs.jsle.user.RacfServiceUserHandler;
 import org.yamcs.jsle.user.RacfStatusReport;
 import org.yamcs.jsle.user.RafServiceUserHandler;
 import org.yamcs.jsle.user.RcfServiceUserHandler;
+import org.yamcs.management.LinkManager;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersService;
@@ -51,6 +53,10 @@ import org.yamcs.xtce.Member;
 import org.yamcs.xtce.Parameter;
 import org.yamcs.xtce.SystemParameter;
 import org.yamcs.xtce.util.AggregateMemberNames;
+import org.yamcs.yarch.DataType;
+import org.yamcs.yarch.Stream;
+import org.yamcs.yarch.Tuple;
+import org.yamcs.yarch.YarchDatabase;
 
 import com.google.gson.JsonObject;
 
@@ -93,6 +99,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
     // together with each frame
     protected ParameterSink parameterSink;
     private Parameter privateAnnotationParameter;
+    private Stream privateAnnotationStream;
+
     int paramSeq = 0;
 
     private SystemParameter sp_sleState, sp_racfStatus;
@@ -136,6 +144,8 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
         spec.addOption("frameQuality", OptionType.STRING).withChoices(RequestedFrameQuality.class);
         spec.addOption("privateAnnotationParameter", OptionType.STRING).withDefault(false).withDescription(
                 "If set, provide the frame annotation received from SLE as a parameter witht the given fqn");
+        spec.addOption("privateAnnotationStream", OptionType.STRING).withDefault(false).withDescription(
+                "If set, provide the frame annotation received from SLE as a paacket on this stream. The stream has to be created before.");
         spec.addOption("startSleOnEnable", OptionType.BOOLEAN).withDefault(true)
                 .withDescription("Whether the SLE session should automatically be STARTed when the link is enabled."
                         + " If false, enabling the link will only BIND it (and it has to be started using the provided action)");
@@ -196,6 +206,19 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
             privateAnnotationParameter = mdb.getParameter(pafqn);
             if (privateAnnotationParameter == null) {
                 throw new ConfigurationException("Cannot find in the MDB the parameter with the name " + pafqn);
+            }
+            /*  if (!config.containsKey(LinkManager.PP_STREAM_KEY)) {
+                throw new ConfigurationException("privateAnnotationParameter configuration requires also the "
+                        + LinkManager.PP_STREAM_KEY + " option");
+            }*/
+        }
+
+        String pastream = config.getString("privateAnnotationStream", null);
+        if (pastream != null) {
+            var ydb = YarchDatabase.getInstance(instance);
+            privateAnnotationStream = ydb.getStream(pastream);
+            if (privateAnnotationStream == null) {
+                throw new ConfigurationException("Cannot find a stream named " + pastream);
             }
         }
 
@@ -337,11 +360,26 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
                 frameHandler.handleFrame(ertime, data, 0, length);
             }
 
-            if (privAnn != null && privateAnnotationParameter != null) {
-                var pv = new ParameterValue(privateAnnotationParameter);
-                pv.setEngValue(ValueUtility.getBinaryValue(privAnn));
-                parameterSink.updateParameters(ertime.getMillis(), "SLE", paramSeq++, Arrays.asList(pv));
+            if (privAnn != null) {
+                if (privateAnnotationParameter != null) {
+
+                    var pv = new ParameterValue(privateAnnotationParameter);
+                    pv.setAcquisitionTime(ertime.getMillis());
+                    pv.setRawValue(ValueUtility.getBinaryValue(privAnn));
+                    parameterSink.updateParameters(ertime.getMillis(), "SLE", paramSeq++, Arrays.asList(pv));
+                }
+                if (privateAnnotationStream != null) {
+                    Tuple t = new Tuple();
+                    t.addColumn(StandardTupleDefinitions.TM_ERTIME_COLUMN, DataType.HRES_TIMESTAMP, ertime);
+                    t.addColumn(StandardTupleDefinitions.GENTIME_COLUMN, ertime.getMillis());
+                    t.addColumn(StandardTupleDefinitions.TM_RECTIME_COLUMN, timeService.getMissionTime());
+                    t.addColumn(StandardTupleDefinitions.SEQNUM_COLUMN, dataInCount.get());
+                    t.addColumn(StandardTupleDefinitions.TM_PACKET_COLUMN, DataType.BINARY, privAnn);
+
+                    privateAnnotationStream.emitTuple(null);
+                }
             }
+
         } catch (TcTmException e) {
             eventProducer.sendWarning("Error processing frame: " + e.toString());
         } catch (Exception e) {
@@ -416,7 +454,6 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
 
     @Override
     public void setParameterSink(ParameterSink parameterSink) {
-        System.out.println(" parameterSink: " + parameterSink);
         this.parameterSink = parameterSink;
     }
 
