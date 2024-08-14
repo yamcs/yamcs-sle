@@ -31,7 +31,6 @@ import org.yamcs.jsle.user.RacfServiceUserHandler;
 import org.yamcs.jsle.user.RacfStatusReport;
 import org.yamcs.jsle.user.RafServiceUserHandler;
 import org.yamcs.jsle.user.RcfServiceUserHandler;
-import org.yamcs.management.LinkManager;
 import org.yamcs.parameter.AggregateValue;
 import org.yamcs.parameter.ParameterValue;
 import org.yamcs.parameter.SystemParametersService;
@@ -364,19 +363,21 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
                 if (privateAnnotationParameter != null) {
 
                     var pv = new ParameterValue(privateAnnotationParameter);
-                    pv.setAcquisitionTime(ertime.getMillis());
+                    pv.setAcquisitionTime(timeService.getMissionTime());
+                    pv.setGenerationTime(ertime.getMillis());
                     pv.setRawValue(ValueUtility.getBinaryValue(privAnn));
                     parameterSink.updateParameters(ertime.getMillis(), "SLE", paramSeq++, Arrays.asList(pv));
                 }
                 if (privateAnnotationStream != null) {
                     Tuple t = new Tuple();
-                    t.addColumn(StandardTupleDefinitions.TM_ERTIME_COLUMN, DataType.HRES_TIMESTAMP, ertime);
-                    t.addColumn(StandardTupleDefinitions.GENTIME_COLUMN, ertime.getMillis());
+                    t.addColumn(StandardTupleDefinitions.GENTIME_COLUMN, DataType.TIMESTAMP, ertime.getMillis());
+                    t.addColumn(StandardTupleDefinitions.SEQNUM_COLUMN, DataType.INT, (int) dataInCount.get());
                     t.addColumn(StandardTupleDefinitions.TM_RECTIME_COLUMN, timeService.getMissionTime());
-                    t.addColumn(StandardTupleDefinitions.SEQNUM_COLUMN, dataInCount.get());
+                    t.addColumn(StandardTupleDefinitions.TM_STATUS_COLUMN, DataType.INT, 0);
                     t.addColumn(StandardTupleDefinitions.TM_PACKET_COLUMN, DataType.BINARY, privAnn);
+                    t.addColumn(StandardTupleDefinitions.TM_ERTIME_COLUMN, DataType.HRES_TIMESTAMP, ertime);
 
-                    privateAnnotationStream.emitTuple(null);
+                    privateAnnotationStream.emitTuple(t);
                 }
             }
 

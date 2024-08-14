@@ -48,3 +48,6 @@ privateAnnotationParameter (string)
    The parameter must exist in the MDB, otherwise Yamcs will not start.
    The parameter is timestamped with the Earth Reception Time received from the SLE provider.
    
+privateAnnotationStream (string)
+   If specified, it is the name of a stream where a packet containing the data of the private annotation will be sent.
+   The stream must exist (it can be configured in the instance configuration streamConfig -> tm) 
