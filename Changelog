@@ -1,3 +1,7 @@
+Version 1.6.1
+- private annotation data can be provided as packet (previously it could only be provided as a binary parameter)
+
+
 Version 1.6.0 released 9-Jul-2024
 - allow specifying a list of endpoints to connect to instead of just one.
 - added support for private annotations: if the privateAnnotationParameter option is specified and the data received via the SLE has private annotation data, 
