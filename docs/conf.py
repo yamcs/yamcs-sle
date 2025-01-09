@@ -15,7 +15,6 @@ pygments_style = "sphinx"
 
 extensions = [
     "sphinx.ext.extlinks",
-    "sphinxcontrib.fulltoc",
     "sphinxcontrib.yamcs",
 ]
 
