@@ -1,4 +1,4 @@
-# Yamcs: SLE Plugin ![Maven Central](https://img.shields.io/maven-central/v/org.yamcs/yamcs-sle.svg?label=release)
+# Yamcs: SLE Plugin ![Release](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Fmaven.yamcs.org%2Freleases%2Forg%2Fyamcs%2Fyamcs-sle%2Fmaven-metadata.xml&label=release)
 
 This project contains Yamcs Data Links for enabling yamcs to receive data from an SLE provider.
 For the moment only FCLTU (Forward CLTU), RAF (Return All Frames) and RCF (Return Channel Frame) are supported.
