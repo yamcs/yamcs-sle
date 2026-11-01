@@ -1,3 +1,6 @@
+Version 1.7.0 released 
+- updated to Yamcs 5.14.0
+
 Version 1.6.1 released 25-Feb-2026
 - updated the version of Netty to be in line with Yamcs
 - private annotation data can be provided as packet (previously it could only be provided as a binary parameter)
