@@ -29,7 +29,7 @@ import org.yamcs.tctm.Link;
 import org.yamcs.tctm.LinkAction;
 import org.yamcs.tctm.ccsds.AbstractTcFrameLink;
 import org.yamcs.tctm.ccsds.DownlinkManagedParameters.FrameErrorDetection;
-import org.yamcs.tctm.ccsds.TcTransferFrame;
+import org.yamcs.tctm.ccsds.UplinkTransferFrame;
 import org.yamcs.utils.StringConverter;
 import org.yamcs.utils.TimeEncoding;
 import org.yamcs.utils.ValueUtility;
@@ -66,7 +66,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     CltuServiceUserHandler csuh;
     CltuSleMonitor sleMonitor;
-    Map<Integer, TcTransferFrame> pendingFrames = new ConcurrentHashMap<>();
+    Map<Integer, UplinkTransferFrame> pendingFrames = new ConcurrentHashMap<>();
     public final static String CMDHISTORY_SLE_REQ_KEY = "SLE_REQ";
     public final static String CMDHISTORY_SLE_RADIATED_KEY = "SLE_RADIATED";
 
@@ -185,7 +185,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     @Override
     public void run() {
         while (isRunningAndEnabled()) {
-            TcTransferFrame tf = multiplexer.getFrame();
+            UplinkTransferFrame tf = multiplexer.getFrame();
             if (tf != null) {
 
                 byte[] data = tf.getData();
@@ -300,7 +300,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         int cltuId = cltuOk.getCltuIdentification().value.intValue();
         CcsdsTime time = CcsdsTime.fromSle(cltuOk.getRadiationStopTime());
         long yamcsTime = TimeEncoding.fromUnixMillisec(time.toJavaMillisec());
-        TcTransferFrame tf = pendingFrames.remove(cltuId);
+        UplinkTransferFrame tf = pendingFrames.remove(cltuId);
         if (tf == null) {
             log.warn("Received cltu-radiated event for unknown cltuId {}", cltuId);
             return;
@@ -434,7 +434,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 csuh = null;
             }
 
-            for (TcTransferFrame tf : pendingFrames.values()) {
+            for (UplinkTransferFrame tf : pendingFrames.values()) {
                 if (tf.isBypass()) {
                     failBypassFrame(tf, "SLE disconnected");
                 }
@@ -535,7 +535,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
         @Override
         public void onNegativeTransfer(int cltuId, DiagnosticCltuTransferData negativeResult) {
-            TcTransferFrame tf = pendingFrames.remove(cltuId);
+            UplinkTransferFrame tf = pendingFrames.remove(cltuId);
             if (tf.isBypass()) {
                 failBypassFrame(tf, negativeResult.toString());
             }
