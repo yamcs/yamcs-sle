@@ -102,7 +102,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     private LinkAction startAction = new LinkAction("start", "Start SLE") {
         @Override
         public void execute(Link link, JsonObject jsonObject, ActionResult result) {
-            if (!isEffectivelyDisabled()) {
+            if (!isDisabled()) {
                 if (requestedState == org.yamcs.jsle.State.UNBOUND) {
                     connectAndBind(true);
                 } else {
@@ -453,7 +453,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
             if (stopAction != null && startAction != null) {
-                if (!isEffectivelyDisabled()) {
+                if (!isDisabled()) {
                     switch (sleState) {
                     case UNBOUND:
                     case READY:
@@ -570,5 +570,13 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         } else {
             return requestedState == org.yamcs.jsle.State.ACTIVE;
         }
+    }
+
+    @Override
+    public boolean isEffectivelyDisabled() {
+        if (isDisabled() || sleState != org.yamcs.jsle.State.ACTIVE) {
+            return true;
+        }
+        return super.isEffectivelyDisabled();
     }
 }
