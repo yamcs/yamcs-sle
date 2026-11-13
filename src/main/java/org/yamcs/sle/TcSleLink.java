@@ -439,6 +439,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                     failBypassFrame(tf, "SLE disconnected");
                 }
             }
+            // The provider discards queued CLTUs without notification (CCSDS 912.1-B-4 3.5.3.1),
+            // so these entries would otherwise stay and count against maxPendingFrames forever.
+            pendingFrames.clear();
             sleState = org.yamcs.jsle.State.UNBOUND;
             endpointHandler.reset();
 
