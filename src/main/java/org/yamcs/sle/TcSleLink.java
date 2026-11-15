@@ -98,6 +98,23 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     boolean startSleOnEnable = true;
 
+    /**
+     * What the provider does with the buffered CLTUs when the association is aborted (CCSDS 912.1-B-5 4.1.5.3)
+     */
+    enum ProtocolAbortMode {
+        /** buffered CLTUs are discarded (the CCSDS default) */
+        FLUSH,
+        /** buffered CLTUs continue to be radiated */
+        CONTINUE,
+        /** query the provider after each BIND, assume FLUSH until it answers */
+        QUERY
+    }
+
+    // configured mode
+    ProtocolAbortMode protocolAbortMode;
+    // mode in effect; FLUSH or CONTINUE
+    volatile ProtocolAbortMode effectiveProtocolAbortMode;
+
     EndpointHandler endpointHandler;
 
     private LinkAction startAction = new LinkAction("start", "Start SLE") {
@@ -128,6 +145,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         this.maxPendingFrames = config.getInt("maxPendingFrames", 20);
         this.waitForUplinkMsec = config.getInt("waitForUplinkMsec", 5000);
         this.startSleOnEnable = config.getBoolean("startSleOnEnable", true);
+        this.protocolAbortMode = config.getEnum("protocolAbortMode", ProtocolAbortMode.class, ProtocolAbortMode.FLUSH);
+        this.effectiveProtocolAbortMode = protocolAbortMode == ProtocolAbortMode.CONTINUE ? ProtocolAbortMode.CONTINUE
+                : ProtocolAbortMode.FLUSH;
 
         YConfiguration slec = YConfiguration.getConfiguration("sle").getConfig("Providers")
                 .getConfig(config.getString("sleProvider"));
@@ -261,8 +281,49 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 return null;
             }
             log.debug("BIND successful");
-            if (startSle) {
+            if (protocolAbortMode == ProtocolAbortMode.QUERY) {
+                queryProtocolAbortMode().whenComplete((v1, t1) -> {
+                    if (startSle) {
+                        sleStart();
+                    }
+                });
+            } else if (startSle) {
                 sleStart();
+            }
+            return null;
+        });
+    }
+
+    /**
+     * Retrieves the protocol-abort-mode from the provider and sets the {@link #effectiveProtocolAbortMode}.
+     * <p>
+     * If the provider does not answer, the mode in effect is left unchanged (FLUSH unless a previous query returned
+     * otherwise).
+     * <p>
+     * The returned future always completes normally.
+     */
+    private CompletableFuture<Void> queryProtocolAbortMode() {
+        CompletableFuture<SleParameter> cf;
+        try {
+            cf = csuh.getParameter(ParameterName.protocolAbortMode);
+        } catch (Exception e) {
+            cf = CompletableFuture.failedFuture(e);
+        }
+        return cf.handle((p, t) -> {
+            if (t != null) {
+                eventProducer.sendWarning("Failed to retrieve protocol-abort-mode from the provider: " + t.getMessage()
+                        + "; assuming " + effectiveProtocolAbortMode.name().toLowerCase());
+                return null;
+            }
+            Object v = p.getParameterValue();
+            // ASN.1: abort (0), continue (1)
+            if (v instanceof Integer && ((Integer) v == 0 || (Integer) v == 1)) {
+                boolean cont = (Integer) v == 1;
+                effectiveProtocolAbortMode = cont ? ProtocolAbortMode.CONTINUE : ProtocolAbortMode.FLUSH;
+                eventProducer.sendInfo("Provider protocol-abort-mode: " + (cont ? "continue" : "abort (flush)"));
+            } else {
+                eventProducer.sendWarning("Unexpected protocol-abort-mode value received from the provider: " + v
+                        + "; assuming " + effectiveProtocolAbortMode.name().toLowerCase());
             }
             return null;
         });
@@ -413,7 +474,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     @Override
     public Map<String, Object> getExtraInfo() {
-        return Map.of("SLE state", sleState);
+        return Map.of("SLE state", sleState,
+                "Protocol abort mode", effectiveProtocolAbortMode.name().toLowerCase());
     }
 
     @Override
@@ -435,11 +497,23 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 csuh = null;
             }
 
-            for (UplinkTransferFrame tf : pendingFrames.values()) {
-                if (tf.isBypass()) {
-                    failBypassFrame(tf, "SLE disconnected");
+            // When the association ends, the provider discards the buffered CLTUs (CCSDS 912.1-B-5 2.6.4.4), unless it
+            // was a protocol abort and the protocol-abort-mode is 'continue' (4.1.5.3) in which case it keeps radiating
+            // them. Either way we will receive no further notifications for them.
+            // If we initiated the unbind (link disabled), the CLTUs are discarded regardless of the mode.
+            boolean flushed = effectiveProtocolAbortMode == ProtocolAbortMode.FLUSH
+                    || requestedState == org.yamcs.jsle.State.UNBOUND;
+            if (flushed) {
+                for (UplinkTransferFrame tf : pendingFrames.values()) {
+                    if (tf.isBypass()) {
+                        failBypassFrame(tf, "SLE disconnected");
+                    }
                 }
+            } else if (!pendingFrames.isEmpty()) {
+                eventProducer.sendWarning(pendingFrames.size() + " CLTUs pending at disconnection;"
+                        + " with protocol-abort-mode 'continue' the provider may still radiate them");
             }
+            pendingFrames.clear();
             sleState = org.yamcs.jsle.State.UNBOUND;
             endpointHandler.reset();
 
