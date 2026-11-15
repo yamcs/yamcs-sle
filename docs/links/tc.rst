@@ -51,6 +51,15 @@ maxPendingFrames:
 startSleOnEnable (boolean)
     Whether the SLE session should automatically be STARTed when the link is enabled. If ``false``, enabling the link will only BIND it. Default: ``true``
 
+protocolAbortMode (string)
+    What the provider does with the CLTUs it has buffered when the connection is lost (the CCSDS ``protocol-abort-mode`` service instance parameter). One of:
+
+    * ``flush``: the buffered CLTUs are discarded. The commands in by-pass (BD) frames still pending at disconnection are negatively acknowledged.
+    * ``continue``: the provider keeps radiating the buffered CLTUs. The commands in pending by-pass frames are not acknowledged, since they may still be radiated; an event reports how many CLTUs were pending.
+    * ``query``: retrieve the value from the provider (CLTU-GET-PARAMETER) after each BIND. Until the provider answers, or if it does not support the parameter, ``flush`` is assumed.
+
+    When the link is disabled, the CLTUs are discarded by the provider regardless of this setting. In all cases, the frames pending at disconnection no longer count against ``maxPendingFrames``. Default: ``flush``
+
 .. include:: _includes/reconnect-options.rst
 
 .. note::
