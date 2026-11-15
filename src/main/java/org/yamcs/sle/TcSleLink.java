@@ -42,6 +42,7 @@ import com.google.gson.JsonObject;
 
 import ccsds.sle.transfer.service.cltu.outgoing.pdus.CltuAsyncNotifyInvocation;
 import ccsds.sle.transfer.service.cltu.outgoing.pdus.CltuStatusReportInvocation;
+import ccsds.sle.transfer.service.cltu.structures.CltuLastOk;
 import ccsds.sle.transfer.service.cltu.structures.CltuLastOk.CltuOk;
 import ccsds.sle.transfer.service.cltu.structures.CltuNotification;
 import ccsds.sle.transfer.service.cltu.structures.DiagnosticCltuTransferData;
@@ -514,7 +515,14 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             prodStatus = CltuProductionStatus.byId(cltuAsyncNotifyInvocation.getProductionStatus().intValue());
 
             if (cn.getCltuRadiated() != null) {
-                onCltuRadiated(cltuAsyncNotifyInvocation.getCltuLastOk().getCltuOk());
+                CltuLastOk lastOk = cltuAsyncNotifyInvocation.getCltuLastOk();
+                CltuOk cltuOk = (lastOk == null) ? null : lastOk.getCltuOk();
+                if (cltuOk == null) {
+                    log.warn("Received cltu-radiated notification without cltu-last-OK: {}", cltuAsyncNotifyInvocation);
+                    uplinkReadySemaphore.release();
+                } else {
+                    onCltuRadiated(cltuOk);
+                }
             } else if (cn.getProductionInterrupted() != null) {
                 eventProducer.sendInfo("CLTU Production interrupted");
             } else if (cn.getProductionHalted() != null) {
@@ -536,7 +544,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         @Override
         public void onNegativeTransfer(int cltuId, DiagnosticCltuTransferData negativeResult) {
             UplinkTransferFrame tf = pendingFrames.remove(cltuId);
-            if (tf.isBypass()) {
+            if (tf == null) {
+                log.warn("Received negative transfer for unknown cltuId {}: {}", cltuId, negativeResult);
+            } else if (tf.isBypass()) {
                 failBypassFrame(tf, negativeResult.toString());
             }
             uplinkReadySemaphore.release();
