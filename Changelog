@@ -2,6 +2,7 @@ Version 1.7.0 released
 - updated to Yamcs 5.14.0
 - TC link: clear the pending frames when the SLE connection is lost; previously they kept counting against maxPendingFrames and could block the uplink after reconnecting.
 - TC link: added the protocolAbortMode option (flush, continue or query the provider) which determines whether the by-pass commands pending at disconnection are failed.
+- TC link: fixed an exception when a BC frame was reported as radiated (#15).
 
 Version 1.6.1 released 25-Feb-2026
 - updated the version of Netty to be in line with Yamcs

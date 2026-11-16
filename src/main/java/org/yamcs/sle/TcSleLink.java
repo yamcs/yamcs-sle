@@ -372,9 +372,12 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             ackBypassFrame(tf);
         }
 
-        for (PreparedCommand pc : tf.getCommands()) {
-            commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, yamcsTime, AckStatus.OK,
-                    time.toStringPico());
+        // BC frames (e.g. COP-1 initiation with unlock) carry no commands
+        if (tf.getCommands() != null) {
+            for (PreparedCommand pc : tf.getCommands()) {
+                commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_RADIATED_KEY, yamcsTime,
+                        AckStatus.OK, time.toStringPico());
+            }
         }
 
         uplinkReadySemaphore.release();
