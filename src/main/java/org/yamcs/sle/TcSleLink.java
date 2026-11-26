@@ -124,7 +124,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     private LinkAction startAction = new LinkAction("start", "Start SLE") {
         @Override
         public void execute(Link link, JsonObject jsonObject, ActionResult result) {
-            if (!isEffectivelyDisabled()) {
+            if (!isDisabled()) {
                 if (requestedState == org.yamcs.jsle.State.UNBOUND) {
                     connectAndBind(true);
                 } else {
@@ -603,7 +603,7 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             eventProducer.sendInfo("SLE state changed to " + newState);
             sleState = newState;
             if (stopAction != null && startAction != null) {
-                if (!isEffectivelyDisabled()) {
+                if (!isDisabled()) {
                     switch (sleState) {
                     case UNBOUND:
                     case READY:
@@ -738,5 +738,22 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         } else {
             return requestedState == org.yamcs.jsle.State.ACTIVE;
         }
+    }
+
+    /**
+     * Reports the link as effectively disabled unless the SLE service is ACTIVE.
+     * <p>
+     * This stretches the usual meaning of the method (disabled by itself or by a parent link): it is used here because
+     * the virtual channel sub-links, which are the ones receiving the commands, derive their isCommandingAvailable()
+     * from the parent's isEffectivelyDisabled(). Without this, a bound but not started link (READY) would accept
+     * commands and fail them after waitForUplinkMsec (#17).
+     * <p>
+     */
+    @Override
+    public boolean isEffectivelyDisabled() {
+        if (isDisabled() || sleState != org.yamcs.jsle.State.ACTIVE) {
+            return true;
+        }
+        return super.isEffectivelyDisabled();
     }
 }
