@@ -1,5 +1,6 @@
 package org.yamcs.sle;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -68,6 +69,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     CltuServiceUserHandler csuh;
     CltuSleMonitor sleMonitor;
     Map<Integer, UplinkTransferFrame> pendingFrames = new ConcurrentHashMap<>();
+    // held by the sender thread from transferCltu until the frame is in pendingFrames, and by whoever removes frames,
+    // so that a fast reply from the provider cannot be processed before the frame is registered
+    private final Object pendingLock = new Object();
     public final static String CMDHISTORY_SLE_REQ_KEY = "SLE_REQ";
     public final static String CMDHISTORY_SLE_RADIATED_KEY = "SLE_RADIATED";
 
@@ -208,46 +212,109 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         while (isRunningAndEnabled()) {
             UplinkTransferFrame tf = multiplexer.getFrame();
             if (tf != null) {
-
-                byte[] data = tf.getData();
-                if (log.isTraceEnabled()) {
-                    log.trace("New TC frame: {}\n\tdata: {}", tf, StringConverter.arrayToHexString(data));
-                }
-
-                data = encodeCltu(tf.getVirtualChannelId(), data);
-
-                if (!isUplinkPossible() && waitForUplinkMsec > 0) {
-                    waitForUplink(waitForUplinkMsec);
-                }
-
-                if (!isUplinkPossible()) {
-                    log.debug("TC frame {} dropped because uplink is not availalbe", tf);
-                    if (tf.isBypass()) {
-                        failBypassFrame(tf, "SLE uplink not available");
-                    }
-                    continue;
-                }
-                if (log.isTraceEnabled()) {
-                    log.trace("Sending CLTU of size {}: {}", data.length, StringConverter.arrayToHexString(data));
-                }
-                int id = csuh.transferCltu(data);
-                dataOut(1, data.length);
-                pendingFrames.put(id, tf);
-                if (tf.getCommands() != null) {
-                    for (PreparedCommand pc : tf.getCommands()) {
-                        commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_REQ_KEY,
-                                TimeEncoding.getWallclockTime(), AckStatus.OK);
+                // an exception must not end this thread, otherwise the link stays enabled but nothing is sent anymore
+                try {
+                    sendFrame(tf);
+                } catch (Exception e) {
+                    log.error("Error sending TC frame {}", tf, e);
+                    if (tf.isBypass() && !pendingFrames.containsValue(tf)) {
+                        failBypassFrame(tf, "Error sending the frame: " + e);
                     }
                 }
-                frameCount++;
             }
         }
     }
 
+    private void sendFrame(UplinkTransferFrame tf) {
+        byte[] data = tf.getData();
+        if (log.isTraceEnabled()) {
+            log.trace("New TC frame: {}\n\tdata: {}", tf, StringConverter.arrayToHexString(data));
+        }
+
+        data = encodeCltu(tf.getVirtualChannelId(), data);
+
+        if (!isUplinkPossible() && waitForUplinkMsec > 0) {
+            waitForUplink(waitForUplinkMsec);
+        }
+
+        // csuh is set to null on disconnection (Netty thread) and on disable; read it only once
+        CltuServiceUserHandler _csuh = csuh;
+        if (_csuh == null || !isUplinkPossible()) {
+            log.debug("TC frame {} dropped because uplink is not available", tf);
+            if (tf.isBypass()) {
+                failBypassFrame(tf, "SLE uplink not available");
+            }
+            return;
+        }
+        if (log.isTraceEnabled()) {
+            log.trace("Sending CLTU of size {}: {}", data.length, StringConverter.arrayToHexString(data));
+        }
+        synchronized (pendingLock) {
+            int id;
+            try {
+                id = _csuh.transferCltu(data);
+            } catch (Exception e) {
+                // e.g. the channel became inactive in the meantime
+                log.warn("Failed to send CLTU: {}", e.toString());
+                if (tf.isBypass()) {
+                    failBypassFrame(tf, "SLE uplink not available");
+                }
+                return;
+            }
+            pendingFrames.put(id, tf);
+        }
+        dataOut(1, data.length);
+        if (tf.getCommands() != null) {
+            for (PreparedCommand pc : tf.getCommands()) {
+                commandHistoryPublisher.publishAck(pc.getCommandId(), CMDHISTORY_SLE_REQ_KEY,
+                        TimeEncoding.getWallclockTime(), AckStatus.OK);
+            }
+        }
+        frameCount++;
+    }
+
     private boolean isUplinkPossible() {
-        return (csuh != null) && csuh.isConnected() && pendingFrames.size() < maxPendingFrames
+        CltuServiceUserHandler _csuh = csuh;
+        return (_csuh != null) && _csuh.isConnected() && pendingFrames.size() < maxPendingFrames
                 && sleState == org.yamcs.jsle.State.ACTIVE
                 && prodStatus == CltuProductionStatus.operational;
+    }
+
+    /**
+     * Removes from {@link #pendingFrames} the frames that the provider discarded without notification, failing the
+     * commands of the bypass frames if failBypass is true.
+     * <p>
+     * If keepOldest is true, the frame with the lowest CLTU id is kept: the provider may be radiating it, in which case
+     * it completes the radiation and reports it (CCSDS 912.1-B-5 3.5.3.1).
+     */
+    private void discardPendingFrames(String reason, boolean failBypass, boolean keepOldest) {
+        List<UplinkTransferFrame> discarded = new ArrayList<>();
+        synchronized (pendingLock) {
+            Integer oldest = null;
+            if (keepOldest) {
+                for (Integer id : pendingFrames.keySet()) {
+                    if (oldest == null || id < oldest) {
+                        oldest = id;
+                    }
+                }
+            }
+            var it = pendingFrames.entrySet().iterator();
+            while (it.hasNext()) {
+                var e = it.next();
+                if (!e.getKey().equals(oldest)) {
+                    it.remove();
+                    discarded.add(e.getValue());
+                }
+            }
+        }
+        if (failBypass) {
+            for (UplinkTransferFrame tf : discarded) {
+                if (tf.isBypass()) {
+                    failBypassFrame(tf, reason);
+                }
+            }
+        }
+        uplinkReadySemaphore.release();
     }
 
     private void waitForUplink(long waitMsec) {
@@ -333,6 +400,12 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         requestedState = org.yamcs.jsle.State.ACTIVE;
         log.debug("Starting SLE service");
 
+        // a frame kept at the previous STOP (because it might have been in radiation) and still not reported
+        // was discarded by the provider
+        if (!pendingFrames.isEmpty()) {
+            discardPendingFrames("SLE stopped, CLTU discarded by the provider", true, false);
+        }
+
         csuh.start().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to start: " + t);
@@ -354,6 +427,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 return null;
             }
             log.debug("Successfully stopped the service");
+            // the provider discards the CLTUs not yet in radiation, without notification (CCSDS 912.1-B-5 3.5.3.1)
+            discardPendingFrames("SLE stopped, CLTU discarded by the provider", true, true);
             return null;
         });
     }
@@ -362,7 +437,10 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         int cltuId = cltuOk.getCltuIdentification().value.intValue();
         CcsdsTime time = CcsdsTime.fromSle(cltuOk.getRadiationStopTime());
         long yamcsTime = TimeEncoding.fromUnixMillisec(time.toJavaMillisec());
-        UplinkTransferFrame tf = pendingFrames.remove(cltuId);
+        UplinkTransferFrame tf;
+        synchronized (pendingLock) {
+            tf = pendingFrames.remove(cltuId);
+        }
         if (tf == null) {
             log.warn("Received cltu-radiated event for unknown cltuId {}", cltuId);
             return;
@@ -506,17 +584,11 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             // If we initiated the unbind (link disabled), the CLTUs are discarded regardless of the mode.
             boolean flushed = effectiveProtocolAbortMode == ProtocolAbortMode.FLUSH
                     || requestedState == org.yamcs.jsle.State.UNBOUND;
-            if (flushed) {
-                for (UplinkTransferFrame tf : pendingFrames.values()) {
-                    if (tf.isBypass()) {
-                        failBypassFrame(tf, "SLE disconnected");
-                    }
-                }
-            } else if (!pendingFrames.isEmpty()) {
+            if (!flushed && !pendingFrames.isEmpty()) {
                 eventProducer.sendWarning(pendingFrames.size() + " CLTUs pending at disconnection;"
                         + " with protocol-abort-mode 'continue' the provider may still radiate them");
             }
-            pendingFrames.clear();
+            discardPendingFrames("SLE disconnected", flushed, false);
             sleState = org.yamcs.jsle.State.UNBOUND;
             endpointHandler.reset();
 
@@ -602,8 +674,14 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 }
             } else if (cn.getProductionInterrupted() != null) {
                 eventProducer.sendInfo("CLTU Production interrupted");
+                // buffered CLTUs are discarded (CCSDS 912.1-B-5 3.7.3.1)
+                discardPendingFrames("CLTU production interrupted", true, false);
             } else if (cn.getProductionHalted() != null) {
                 eventProducer.sendInfo("CLTU Production halted");
+                discardPendingFrames("CLTU production halted", true, false);
+            } else if (cn.getSlduExpired() != null) {
+                eventProducer.sendWarning("CLTU expired before radiation; the provider discarded the buffered CLTUs");
+                discardPendingFrames("CLTU expired", true, false);
             } else if (cn.getProductionOperational() != null) {
                 eventProducer.sendInfo("CLTU Production operational");
                 uplinkReadySemaphore.release();
@@ -620,7 +698,10 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
         @Override
         public void onNegativeTransfer(int cltuId, DiagnosticCltuTransferData negativeResult) {
-            UplinkTransferFrame tf = pendingFrames.remove(cltuId);
+            UplinkTransferFrame tf;
+            synchronized (pendingLock) {
+                tf = pendingFrames.remove(cltuId);
+            }
             if (tf == null) {
                 log.warn("Received negative transfer for unknown cltuId {}: {}", cltuId, negativeResult);
             } else if (tf.isBypass()) {

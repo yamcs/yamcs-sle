@@ -35,6 +35,8 @@ Thus there can be a number of commands pending transmission, some in the specifi
 
 Note that if the SLE TC link is disabled, the multiplexer will not be queried for new frames, so the commands may queue in the sub-links, indefinitely. This will only happen however, if the main SLE TC link is disabled and the virtual channel sub-links enabled.
 
+The provider discards the CLTUs it has buffered, without reporting them individually, when the SLE service is stopped, when it notifies 'production interrupted', 'production halted' or 'sldu expired', and when the connection is lost (see ``protocolAbortMode`` below). The link then stops waiting for these frames and negatively acknowledges the commands in the by-pass frames among them; COP-1 takes care of the AD frames. On STOP, the oldest pending frame is kept until the next START, because the provider completes and reports the CLTU that was being radiated.
+
 
 Options
 -------
