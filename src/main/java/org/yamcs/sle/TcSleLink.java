@@ -572,6 +572,18 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         }
     }
 
+    /**
+     * Reports the link as effectively disabled unless the SLE service is ACTIVE.
+     * <p>
+     * This stretches the usual meaning of the method (disabled by itself or by a parent link): it is used here because
+     * the virtual channel sub-links, which are the ones receiving the commands, derive their isCommandingAvailable()
+     * from the parent's isEffectivelyDisabled(). Without this, a bound but not started link (READY) would accept
+     * commands and fail them after waitForUplinkMsec (#17).
+     * <p>
+     * Inside this class use isDisabled() where the link's own enabled state is meant (e.g. for the START action).
+     * <p>
+     * A cleaner fix would be for the sub-links to ask the parent's isCommandingAvailable() instead (Yamcs core change).
+     */
     @Override
     public boolean isEffectivelyDisabled() {
         if (isDisabled() || sleState != org.yamcs.jsle.State.ACTIVE) {
