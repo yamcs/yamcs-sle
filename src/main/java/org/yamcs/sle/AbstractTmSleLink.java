@@ -60,6 +60,7 @@ import org.yamcs.yarch.YarchDatabase;
 import com.google.gson.JsonObject;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -76,10 +77,11 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
         implements FrameConsumer, SleLink, ParameterDataLink {
     String packetPreprocessorClassName;
     Object packetPreprocessorArgs;
-    RacfServiceUserHandler rsuh;
+    // the current connection; a connection stops being current when the link is disabled or the connection is lost.
+    // Set only in connectAndBind and cleared via takeHandler/clearIfCurrent (synchronized), at most one at a time.
+    volatile RacfServiceUserHandler rsuh;
     EndpointHandler endpointHandler;
 
-    RacfSleMonitor sleMonitor = new MyMonitor();
     SleConfig sconf;
 
     DeliveryMode deliveryMode;
@@ -223,8 +225,19 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
 
     }
 
+    /**
+     * Connects to the provider and binds, unless the link is disabled or there is already a connection.
+     * <p>
+     * The second condition matters because reconnections are scheduled from several places (connection lost,
+     * connection failed, start action); a second connection would leave the first one bound to the service instance
+     * and never closed, after which the provider refuses all binds with 'already bound' (yamcs-sle#16).
+     */
     protected synchronized void connectAndBind(boolean startSle) {
         if (!isRunningAndEnabled()) {
+            return;
+        }
+        if (rsuh != null) {
+            log.debug("Already connected or connecting to the SLE provider");
             return;
         }
         requestedState = org.yamcs.jsle.State.READY;
@@ -234,16 +247,18 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
         eventProducer
                 .sendInfo("Connecting to SLE " + service + " service " + endpoint.getHost() + ":" + endpoint.getPort()
                         + " as user " + sconf.auth.getMyUsername());
+        RacfServiceUserHandler h;
         if (gvcid == null) {
-            rsuh = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
-            ((RafServiceUserHandler) rsuh).setRequestedFrameQuality(frameQuality);
+            h = new RafServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
+            ((RafServiceUserHandler) h).setRequestedFrameQuality(frameQuality);
         } else {
-            rsuh = new RcfServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
+            h = new RcfServiceUserHandler(sconf.auth, sconf.attr, deliveryMode, this);
         }
-        rsuh.setVersionNumber(sconf.versionNumber);
-        rsuh.setAuthLevel(sconf.authLevel);
-        rsuh.setReturnTimeoutSec(sconf.returnTimeoutSec);
-        rsuh.addMonitor(sleMonitor);
+        h.setVersionNumber(sconf.versionNumber);
+        h.setAuthLevel(sconf.authLevel);
+        h.setReturnTimeoutSec(sconf.returnTimeoutSec);
+        h.addMonitor(new MyMonitor(h));
+        rsuh = h;
 
         NioEventLoopGroup workerGroup = getEventLoop();
         Bootstrap b = new Bootstrap();
@@ -256,34 +271,72 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
             public void initChannel(SocketChannel ch) throws Exception {
                 ch.pipeline().addLast(new LengthFieldBasedFrameDecoder(sconf.tmlMaxLength, 4, 4));
                 ch.pipeline().addLast(new Isp1Handler(true, sconf.hbSettings));
-                ch.pipeline().addLast(rsuh);
+                ch.pipeline().addLast(h);
             }
         });
 
-        b.connect(endpoint.getHost(), endpoint.getPort()).addListener(f -> {
+        ChannelFuture cf = b.connect(endpoint.getHost(), endpoint.getPort());
+        cf.addListener(f -> {
             if (!f.isSuccess()) {
+                if (!clearIfCurrent(h)) {
+                    return; // the link has been disabled in the meantime
+                }
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
-                rsuh = null;
                 long nextAttempt = endpointHandler.nextConnectionAttemptMillis();
 
                 if (nextAttempt >= 0) {
                     workerGroup.schedule(() -> connectAndBind(startSle), nextAttempt, TimeUnit.MILLISECONDS);
                 }
+            } else if (rsuh != h) {
+                // the link has been disabled while connecting; h.shutdown() does nothing before the channel is active
+                cf.channel().close();
             } else {
-                sleBind(startSle);
+                sleBind(h, startSle);
             }
         });
     }
 
-    private void sleBind(boolean startSle) {
+    /**
+     * Clears {@link #rsuh} if it is h
+     *
+     * @return true if h was the current connection
+     */
+    protected synchronized boolean clearIfCurrent(RacfServiceUserHandler h) {
+        if (rsuh == h) {
+            rsuh = null;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Gracefully closes the current connection (if any); from now on its callbacks are ignored.
+     */
+    protected void closeConnection() {
+        RacfServiceUserHandler h;
+        synchronized (this) {
+            h = rsuh;
+            rsuh = null;
+        }
+        if (h != null) {
+            Utils.sleStop(h, sconf, eventProducer);
+        }
+        sleState = org.yamcs.jsle.State.UNBOUND;
+    }
+
+    private void sleBind(RacfServiceUserHandler h, boolean startSle) {
         requestedState = org.yamcs.jsle.State.READY;
 
-        rsuh.bind().handle((v, t) -> {
+        h.bind().handle((v, t) -> {
             if (t != null) {
-                eventProducer.sendWarning("Failed to bind: " + t.getMessage());
+                if (rsuh == h) {
+                    // the disconnection triggers a new attempt after reconnectionIntervalSec
+                    eventProducer.sendWarning("Failed to bind: " + t.getMessage() + "; closing the connection");
+                }
+                h.shutdown();
                 return null;
             }
-            if (startSle) {
+            if (startSle && rsuh == h) {
                 sleStart();
             }
             return null;
@@ -293,10 +346,14 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
     abstract void sleStart();
 
     void sleStop() {
+        RacfServiceUserHandler h = rsuh;
+        if (h == null) {
+            return;
+        }
         requestedState = org.yamcs.jsle.State.READY;
         log.debug("Stopping SLE service");
 
-        rsuh.stop().handle((v, t) -> {
+        h.stop().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to stop: " + t);
                 return null;
@@ -458,12 +515,26 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
         this.parameterSink = parameterSink;
     }
 
+    /**
+     * Monitors one connection. Once the connection is no longer the current one (the link has been disabled or the
+     * connection lost), its callbacks are ignored, except for logging: otherwise a closing connection could shut
+     * down or change the state of a newer one.
+     */
     class MyMonitor implements RacfSleMonitor {
+        final RacfServiceUserHandler suh;
 
         private ProductionStatus prodStatus;
         private LockStatus subcarrierLockStatus;
         private LockStatus symbolSyncLockStatus;
         private LockStatus carrierLockStatus;
+
+        MyMonitor(RacfServiceUserHandler suh) {
+            this.suh = suh;
+        }
+
+        boolean isCurrent() {
+            return rsuh == suh;
+        }
 
         @Override
         public void connected() {
@@ -473,12 +544,10 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
         @Override
         public void disconnected() {
             eventProducer.sendInfo("SLE disconnected");
-            endpointHandler.reset();
-
-            if (rsuh != null) {
-                rsuh.shutdown();
-                rsuh = null;
+            if (!clearIfCurrent(suh)) {
+                return;
             }
+            endpointHandler.reset();
             sleState = org.yamcs.jsle.State.UNBOUND;
 
             if (isRunningAndEnabled() && sconf.reconnectionIntervalSec >= 0) {
@@ -490,6 +559,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
         @Override
         public void stateChanged(org.yamcs.jsle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
+            if (!isCurrent()) {
+                return;
+            }
             sleState = newState;
             if (stopAction != null && startAction != null) {
                 if (!isEffectivelyDisabled()) {
@@ -526,6 +598,9 @@ public abstract class AbstractTmSleLink extends AbstractTmFrameLink
 
         @Override
         public void onStatusReport(RacfStatusReport rafStatusReport) {
+            if (!isCurrent()) {
+                return;
+            }
             prodStatus = rafStatusReport.getProductionStatus();
             carrierLockStatus = rafStatusReport.getCarrierLockStatus();
             subcarrierLockStatus = rafStatusReport.getSubcarrierLockStatus();

@@ -10,7 +10,7 @@ import org.yamcs.jsle.CcsdsTime;
 import org.yamcs.jsle.Constants.DeliveryMode;
 import org.yamcs.jsle.Constants.FrameQuality;
 import org.yamcs.jsle.Constants.UnbindReason;
-import org.yamcs.jsle.RacfSleMonitor;
+import org.yamcs.jsle.user.RacfServiceUserHandler;
 import org.yamcs.jsle.user.RafServiceUserHandler;
 import org.yamcs.jsle.user.RcfServiceUserHandler;
 
@@ -64,7 +64,6 @@ import org.yamcs.jsle.user.RcfServiceUserHandler;
  *
  */
 public class OfflineTmSleLink extends AbstractTmSleLink {
-    RacfSleMonitor sleMonitor = new MyMonitor();
     LinkedBlockingQueue<RequestRange> requestQueue = new LinkedBlockingQueue<>();
     volatile int numRequests;
     int lastReqFrameCount;
@@ -81,7 +80,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doStop() {
-        Utils.sleStop(rsuh, sconf, eventProducer);
+        closeConnection();
         notifyStopped();
     }
 
@@ -90,21 +89,24 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     }
 
     void sleStart() {
+        RacfServiceUserHandler h = rsuh;
+        if (h == null) {
+            return;
+        }
         requestedState = org.yamcs.jsle.State.ACTIVE;
 
         RequestRange rr = requestQueue.poll();
         if (rr == null) {
             eventProducer.sendInfo("All requests finished, disconnecting from SLE");
-            Utils.sleStop(rsuh, sconf, eventProducer);
-            rsuh = null;
+            closeConnection();
         } else {
             eventProducer.sendInfo("Starting an offline request for interval " + rr);
             lastReqFrameCount = 0;
             CompletableFuture<Void> cf;
             if (gvcid == null) {
-                cf = ((RafServiceUserHandler) rsuh).start(rr.start, rr.stop);
+                cf = ((RafServiceUserHandler) h).start(rr.start, rr.stop);
             } else {
-                cf = ((RcfServiceUserHandler) rsuh).start(rr.start, rr.stop, gvcid);
+                cf = ((RcfServiceUserHandler) h).start(rr.start, rr.stop, gvcid);
             }
 
             cf.handle((v, t) -> {
@@ -129,10 +131,7 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doDisable() {
-        if (rsuh != null) {
-            Utils.sleStop(rsuh, sconf, eventProducer);
-            rsuh = null;
-        }
+        closeConnection();
     }
 
     @Override
@@ -146,7 +145,11 @@ public class OfflineTmSleLink extends AbstractTmSleLink {
     public void onEndOfData() {
         eventProducer.sendInfo("SLE end of data received. " + lastReqFrameCount + " frames received");
 
-        rsuh.stop().handle((v, t) -> {
+        RacfServiceUserHandler h = rsuh;
+        if (h == null) {
+            return;
+        }
+        h.stop().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to stop: " + t.getMessage());
                 return null;

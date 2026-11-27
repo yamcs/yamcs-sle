@@ -1,3 +1,8 @@
+Version 1.7.1 (not yet released)
+- fixed a second SLE connection being made when the link was disabled and enabled (or started) while a reconnection was pending; the first connection stayed bound and was never closed, so the provider refused all following binds with 'already bound' until Yamcs was restarted (#16).
+- a failed BIND now closes the connection and is retried after reconnectionIntervalSec; previously the link stayed unbound until disabled and enabled.
+- the service level maxShutdownDelaySec option was read from the misnamed maxShutdownDelayMillis key (still accepted).
+
 Version 1.7.0 released 26-Nov-2026
 - updated to Yamcs 5.14
 - updated to jsle 1.1.2: after a rejected CLTU the uplink no longer stays blocked with out of sequence rejections until the next START (yamcs/jsle#17).

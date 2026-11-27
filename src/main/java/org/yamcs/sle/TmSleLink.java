@@ -9,7 +9,7 @@ import org.yamcs.Spec.OptionType;
 import org.yamcs.tctm.ccsds.UdpTmFrameLink;
 
 import org.yamcs.jsle.Constants.DeliveryMode;
-import org.yamcs.jsle.RacfSleMonitor;
+import org.yamcs.jsle.user.RacfServiceUserHandler;
 import org.yamcs.jsle.user.RafServiceUserHandler;
 import org.yamcs.jsle.user.RcfServiceUserHandler;
 
@@ -81,7 +81,6 @@ import org.yamcs.jsle.user.RcfServiceUserHandler;
  * </table>
  */
 public class TmSleLink extends AbstractTmSleLink {
-    RacfSleMonitor sleMonitor = new MyMonitor();
 
     @Override
     public Spec getDefaultSpec() {
@@ -122,21 +121,22 @@ public class TmSleLink extends AbstractTmSleLink {
 
     @Override
     protected void doStop() {
-        if (rsuh != null) {
-            Utils.sleStop(rsuh, sconf, eventProducer);
-            rsuh = null;
-        }
+        closeConnection();
         notifyStopped();
     }
 
     protected void sleStart() {
+        RacfServiceUserHandler h = rsuh;
+        if (h == null) {
+            return;
+        }
         requestedState = org.yamcs.jsle.State.ACTIVE;
 
         CompletableFuture<Void> cf;
         if (gvcid == null) {
-            cf = ((RafServiceUserHandler) rsuh).start();
+            cf = ((RafServiceUserHandler) h).start();
         } else {
-            cf = ((RcfServiceUserHandler) rsuh).start(gvcid);
+            cf = ((RcfServiceUserHandler) h).start(gvcid);
         }
         cf.handle((v, t) -> {
             if (t != null) {
@@ -144,7 +144,7 @@ public class TmSleLink extends AbstractTmSleLink {
                 return null;
             }
             log.debug("Successfully started the service");
-            rsuh.schedulePeriodicStatusReport(10);
+            h.schedulePeriodicStatusReport(10);
             return null;
         });
     }
@@ -154,10 +154,7 @@ public class TmSleLink extends AbstractTmSleLink {
         requestedState = org.yamcs.jsle.State.UNBOUND;
         startAction.setEnabled(false);
         stopAction.setEnabled(false);
-        if (rsuh != null) {
-            Utils.sleStop(rsuh, sconf, eventProducer);
-            rsuh = null;
-        }
+        closeConnection();
         eventProducer.sendInfo("SLE link disabled");
     }
 

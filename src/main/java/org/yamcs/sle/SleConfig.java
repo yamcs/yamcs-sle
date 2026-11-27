@@ -62,8 +62,11 @@ public class SleConfig {
         this.unbindReason = tconfig.getEnum("unbindReason", UnbindReason.class,
                 config.getEnum("unbindReason", UnbindReason.class, UnbindReason.END));
 
-        this.maxShutdownDelayMillis = 1000 * tconfig.getLong("maxShutdownDelayMillis",
-                config.getLong("maxShutdownDelaySec", 5));
+        // previous versions read the service level value (in seconds) from the misnamed maxShutdownDelayMillis key
+        long maxShutdownDelaySec = config.getLong("maxShutdownDelaySec", 5);
+        maxShutdownDelaySec = tconfig.getLong("maxShutdownDelayMillis", maxShutdownDelaySec);
+        maxShutdownDelaySec = tconfig.getLong("maxShutdownDelaySec", maxShutdownDelaySec);
+        this.maxShutdownDelayMillis = 1000 * maxShutdownDelaySec;
 
         this.connectionTimeoutMillis = tconfig.getInt("connectionTimeoutMillis",
                 config.getInt("connectionTimeoutMillis", 5000));

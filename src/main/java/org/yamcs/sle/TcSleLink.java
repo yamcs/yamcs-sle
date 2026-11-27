@@ -48,6 +48,7 @@ import ccsds.sle.transfer.service.cltu.structures.CltuLastOk.CltuOk;
 import ccsds.sle.transfer.service.cltu.structures.CltuNotification;
 import ccsds.sle.transfer.service.cltu.structures.DiagnosticCltuTransferData;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -66,8 +67,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
     SleConfig sconf;
 
-    CltuServiceUserHandler csuh;
-    CltuSleMonitor sleMonitor;
+    // the current connection; a connection stops being current when the link is disabled or the connection is lost.
+    // Set only in connectAndBind and cleared via takeHandler/clearIfCurrent (synchronized), at most one at a time.
+    volatile CltuServiceUserHandler csuh;
     Map<Integer, UplinkTransferFrame> pendingFrames = new ConcurrentHashMap<>();
     // held by the sender thread from transferCltu until the frame is in pendingFrames, and by whoever removes frames,
     // so that a fast reply from the provider cannot be processed before the frame is registered
@@ -157,11 +159,21 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
                 .getConfig(config.getString("sleProvider"));
         sconf = new SleConfig(slec, "cltu");
         this.endpointHandler = new EndpointHandler(sconf);
-        sleMonitor = new MyMonitor();
     }
 
+    /**
+     * Connects to the provider and binds, unless the link is disabled or there is already a connection.
+     * <p>
+     * The second condition matters because reconnections are scheduled from several places (connection lost,
+     * connection failed, start action); a second connection would leave the first one bound to the service instance
+     * and never closed, after which the provider refuses all binds with 'already bound' (yamcs-sle#16).
+     */
     private synchronized void connectAndBind(boolean startSle) {
         if (!isRunningAndEnabled()) {
+            return;
+        }
+        if (csuh != null) {
+            log.debug("Already connected or connecting to the SLE provider");
             return;
         }
         requestedState = org.yamcs.jsle.State.READY;
@@ -170,12 +182,13 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         eventProducer.sendInfo(
                 "Connecting to SLE FCLTU service " + endpoint.getHost() + ":" + endpoint.getPort() + " as user " +
                         sconf.auth.getMyUsername());
-        csuh = new CltuServiceUserHandler(sconf.auth, sconf.attr);
-        csuh.setVersionNumber(sconf.versionNumber);
-        csuh.setAuthLevel(sconf.authLevel);
-        csuh.setReturnTimeoutSec(sconf.returnTimeoutSec);
+        CltuServiceUserHandler h = new CltuServiceUserHandler(sconf.auth, sconf.attr);
+        h.setVersionNumber(sconf.versionNumber);
+        h.setAuthLevel(sconf.authLevel);
+        h.setReturnTimeoutSec(sconf.returnTimeoutSec);
 
-        csuh.addMonitor(sleMonitor);
+        h.addMonitor(new MyMonitor(h));
+        csuh = h;
 
         NioEventLoopGroup workerGroup = getEventLoop();
         Bootstrap b = new Bootstrap();
@@ -188,23 +201,53 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             public void initChannel(SocketChannel ch) throws Exception {
                 ch.pipeline().addLast(new LengthFieldBasedFrameDecoder(sconf.tmlMaxLength, 4, 4));
                 ch.pipeline().addLast(new Isp1Handler(true, sconf.hbSettings));
-                ch.pipeline().addLast(csuh);
+                ch.pipeline().addLast(h);
             }
         });
-        b.connect(endpoint.getHost(), endpoint.getPort()).addListener(f -> {
+        ChannelFuture cf = b.connect(endpoint.getHost(), endpoint.getPort());
+        cf.addListener(f -> {
             if (!f.isSuccess()) {
+                if (!clearIfCurrent(h)) {
+                    return; // the link has been disabled in the meantime
+                }
                 eventProducer.sendWarning("Failed to connect to the SLE provider: " + f.cause().getMessage());
-                csuh = null;
 
                 long nextAttempt = endpointHandler.nextConnectionAttemptMillis();
 
                 if (nextAttempt >= 0) {
                     workerGroup.schedule(() -> connectAndBind(startSle), nextAttempt, TimeUnit.MILLISECONDS);
                 }
+            } else if (csuh != h) {
+                // the link has been disabled while connecting; h.shutdown() does nothing before the channel is active
+                cf.channel().close();
             } else {
-                sleBind(startSle);
+                sleBind(h, startSle);
             }
         });
+    }
+
+    /**
+     * Clears {@link #csuh} if it is h
+     *
+     * @return true if h was the current connection
+     */
+    private synchronized boolean clearIfCurrent(CltuServiceUserHandler h) {
+        if (csuh == h) {
+            csuh = null;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Clears {@link #csuh}
+     *
+     * @return the connection which was current (possibly null)
+     */
+    private synchronized CltuServiceUserHandler takeHandler() {
+        CltuServiceUserHandler h = csuh;
+        csuh = null;
+        return h;
     }
 
     @Override
@@ -339,18 +382,25 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         }
     }
 
-    private void sleBind(boolean startSle) {
+    private void sleBind(CltuServiceUserHandler h, boolean startSle) {
         requestedState = org.yamcs.jsle.State.READY;
 
-        csuh.bind().handle((v, t) -> {
+        h.bind().handle((v, t) -> {
             if (t != null) {
-                eventProducer.sendWarning("Failed to bind: " + t.getMessage());
+                if (csuh == h) {
+                    // the disconnection triggers a new attempt after reconnectionIntervalSec
+                    eventProducer.sendWarning("Failed to bind: " + t.getMessage() + "; closing the connection");
+                }
+                h.shutdown();
                 return null;
+            }
+            if (csuh != h) {
+                return null; // the link has been disabled in the meantime, the connection is being closed
             }
             log.debug("BIND successful");
             if (protocolAbortMode == ProtocolAbortMode.QUERY) {
-                queryProtocolAbortMode().whenComplete((v1, t1) -> {
-                    if (startSle) {
+                queryProtocolAbortMode(h).whenComplete((v1, t1) -> {
+                    if (startSle && csuh == h) {
                         sleStart();
                     }
                 });
@@ -369,10 +419,10 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
      * <p>
      * The returned future always completes normally.
      */
-    private CompletableFuture<Void> queryProtocolAbortMode() {
+    private CompletableFuture<Void> queryProtocolAbortMode(CltuServiceUserHandler h) {
         CompletableFuture<SleParameter> cf;
         try {
-            cf = csuh.getParameter(ParameterName.protocolAbortMode);
+            cf = h.getParameter(ParameterName.protocolAbortMode);
         } catch (Exception e) {
             cf = CompletableFuture.failedFuture(e);
         }
@@ -397,6 +447,10 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
     }
 
     private void sleStart() {
+        CltuServiceUserHandler h = csuh;
+        if (h == null) {
+            return;
+        }
         requestedState = org.yamcs.jsle.State.ACTIVE;
         log.debug("Starting SLE service");
 
@@ -406,22 +460,26 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
             discardPendingFrames("SLE stopped, CLTU discarded by the provider", true, false);
         }
 
-        csuh.start().handle((v, t) -> {
+        h.start().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to start: " + t);
                 return null;
             }
             log.debug("Successfully started the service");
-            csuh.schedulePeriodicStatusReport(10);
+            h.schedulePeriodicStatusReport(10);
             return null;
         });
     }
 
     private void sleStop() {
+        CltuServiceUserHandler h = csuh;
+        if (h == null) {
+            return;
+        }
         requestedState = org.yamcs.jsle.State.READY;
         log.debug("Stopping SLE service");
 
-        csuh.stop().handle((v, t) -> {
+        h.stop().handle((v, t) -> {
             if (t != null) {
                 eventProducer.sendWarning("Failed to stop: " + t);
                 return null;
@@ -506,10 +564,15 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         if (thread != null) {
             thread.interrupt();
         }
-        if (csuh != null) {
-            Utils.sleStop(csuh, sconf, eventProducer);
-            csuh = null;
+        CltuServiceUserHandler h = takeHandler();
+        if (h != null) {
+            Utils.sleStop(h, sconf, eventProducer);
         }
+        sleState = org.yamcs.jsle.State.UNBOUND;
+        // The provider discards the buffered CLTUs when the association ends (CCSDS 912.1-B-5 2.6.4.4). The
+        // notifications of the connection being closed are ignored (see MyMonitor), so the pending frames are
+        // discarded now, before a new connection may be made.
+        discardPendingFrames("SLE link disabled", true, false);
         eventProducer.sendInfo("SLE link disabled");
     }
 
@@ -564,7 +627,22 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         return "SLE " + sleState;
     }
 
+    /**
+     * Monitors one connection. Once the connection is no longer the current one (the link has been disabled or the
+     * connection lost), its callbacks are ignored, except for logging: otherwise a closing connection could shut
+     * down or change the state of a newer one.
+     */
     class MyMonitor implements CltuSleMonitor {
+        final CltuServiceUserHandler suh;
+
+        MyMonitor(CltuServiceUserHandler suh) {
+            this.suh = suh;
+        }
+
+        boolean isCurrent() {
+            return csuh == suh;
+        }
+
         @Override
         public void connected() {
             eventProducer.sendInfo("SLE connected");
@@ -573,9 +651,8 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         @Override
         public void disconnected() {
             eventProducer.sendInfo("SLE disconnected");
-            if (csuh != null) {
-                csuh.shutdown();
-                csuh = null;
+            if (!clearIfCurrent(suh)) {
+                return;
             }
 
             // When the association ends, the provider discards the buffered CLTUs (CCSDS 912.1-B-5 2.6.4.4), unless it
@@ -601,6 +678,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         @Override
         public void stateChanged(org.yamcs.jsle.State newState) {
             eventProducer.sendInfo("SLE state changed to " + newState);
+            if (!isCurrent()) {
+                return;
+            }
             sleState = newState;
             if (stopAction != null && startAction != null) {
                 if (!isDisabled()) {
@@ -637,6 +717,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
         @Override
         public void onCltuStatusReport(CltuStatusReportInvocation cltuStatusReport) {
+            if (!isCurrent()) {
+                return;
+            }
             prodStatus = CltuProductionStatus.byId(cltuStatusReport.getCltuProductionStatus().intValue());
             uplinkStatus = UplinkStatus.byId(cltuStatusReport.getUplinkStatus().intValue());
             AggregateValue tmp = new AggregateValue(cltuStatusMembers);
@@ -659,6 +742,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
         public void onAsyncNotify(CltuAsyncNotifyInvocation cltuAsyncNotifyInvocation) {
             if (log.isTraceEnabled()) {
                 log.trace("received cltuAsyncNotifyInvocation:{} ", cltuAsyncNotifyInvocation);
+            }
+            if (!isCurrent()) {
+                return;
             }
             CltuNotification cn = cltuAsyncNotifyInvocation.getCltuNotification();
             prodStatus = CltuProductionStatus.byId(cltuAsyncNotifyInvocation.getProductionStatus().intValue());
@@ -698,6 +784,9 @@ public class TcSleLink extends AbstractTcFrameLink implements Runnable, SleLink 
 
         @Override
         public void onNegativeTransfer(int cltuId, DiagnosticCltuTransferData negativeResult) {
+            if (!isCurrent()) {
+                return;
+            }
             UplinkTransferFrame tf;
             synchronized (pendingLock) {
                 tf = pendingFrames.remove(cltuId);
